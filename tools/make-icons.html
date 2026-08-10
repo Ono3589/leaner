@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Leaner — Icons erzeugen</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background:#FBFBFA; color:#16181A;
+         display:grid; place-items:center; min-height:100vh; margin:0; padding:30px; text-align:center; }
+  h1 { font-weight:600; letter-spacing:-.03em; }
+  button { margin:5px; padding:12px 18px; border-radius:12px; font-size:15px; font-weight:550;
+           background:#fff; border:1px solid #E5E5E1; color:#16181A; cursor:pointer; }
+  p { color:#6A6E73; max-width:430px; line-height:1.55; }
+  code { background:#F2F2F0; padding:2px 6px; border-radius:5px; }
+</style>
+</head>
+<body>
+<div>
+  <h1>App-Icons erzeugen</h1>
+  <p>Klick auf die Buttons. Die PNGs landen im Download-Ordner — leg sie danach in
+     <code>leaner/icons/</code> und kommentiere die <code>apple-touch-icon</code>-Zeile
+     in <code>index.html</code> ein.</p>
+  <div>
+    <button data-size="180">icon-180.png</button>
+    <button data-size="192">icon-192.png</button>
+    <button data-size="512">icon-512.png</button>
+  </div>
+  <canvas id="c" style="margin-top:24px;border-radius:22px;width:180px;height:180px"></canvas>
+</div>
+<script>
+const SVG_URL = '../icons/icon.svg';
+const canvas = document.getElementById('c');
+
+function render(size, download) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    if (download) {
+      canvas.toBlob((b) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'icon-' + size + '.png';
+        a.click();
+      }, 'image/png');
+    }
+  };
+  img.src = SVG_URL;
+}
+
+render(180, false);
+document.querySelectorAll('button').forEach((b) =>
+  b.addEventListener('click', () => render(+b.dataset.size, true)));
+</script>
+</body>
+</html>

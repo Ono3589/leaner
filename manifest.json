@@ -1,0 +1,16 @@
+{
+  "name": "Leaner — Gesund leben mit ADHS",
+  "short_name": "Leaner",
+  "description": "Ernährung, Fasten, Bewegung und Mindfulness in kleinen, belohnenden Schritten. Gebaut für ADHS-Gehirne.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBFBFA",
+  "theme_color": "#FBFBFA",
+  "lang": "de",
+  "categories": ["health", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

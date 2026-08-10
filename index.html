@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Leaner</title>
+<meta name="description" content="Gesunde Ernährung und gesunder Lifestyle — gebaut für ADHS-Gehirne.">
+<meta name="theme-color" content="#FBFBFA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1113" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Leaner">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<!-- apple-touch-icon: icons/icon-180.png über tools/make-icons.html erzeugen, dann einkommentieren
+<link rel="apple-touch-icon" href="icons/icon-180.png"> -->
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app" hidden>
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand-mark" id="brandMark"></span>
+      <span class="brand-name">leaner</span>
+    </div>
+    <div class="tb-right">
+      <button class="chip" id="streakChip" type="button" aria-label="Streak">
+        <span id="streakIco"></span><span id="streakVal">0</span>
+      </button>
+      <button class="chip" id="levelChip" type="button" aria-label="Level">
+        <span id="levelIco"></span><span id="levelVal">1</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <nav id="tabbar" role="tablist"></nav>
+</div>
+
+<div id="sheet" class="sheet" aria-hidden="true">
+  <div class="sheet-backdrop" data-close-sheet></div>
+  <div class="sheet-panel" role="dialog" aria-modal="true">
+    <button class="sheet-grip" data-close-sheet aria-label="Schließen"></button>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<div id="gate" class="gate" hidden></div>
+
+<div id="toasts" aria-live="polite"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="cloud.js"></script>
+<script src="icons.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
