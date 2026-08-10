@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 56" width="260" height="56" fill="none">
+  <!-- Leaner Wortmarke
+       Zeichen + Wortmarke, beides in currentColor — funktioniert damit
+       auf hellem und dunklem Grund ohne zweite Datei.
+       Hinweis: Die Schrift ist als <text> gesetzt, damit sie editierbar
+       bleibt. Für Druck oder fremde Systeme vorher in Pfade umwandeln
+       (Illustrator/Figma: "Convert to outlines"). -->
+
+  <g transform="translate(4 4)">
+    <path d="M17 9v20a7 7 0 0 0 7 7c6 0 9.2-5.6 13-17"
+          stroke="currentColor" stroke-width="4.4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="62" y="38"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Inter, system-ui, sans-serif"
+        font-size="34" font-weight="600" letter-spacing="-1.4"
+        fill="currentColor">leaner</text>
+</svg>

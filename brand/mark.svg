@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
+  <!-- Leaner Monogramm
+       Ein einziger Strich: das kleine "l" kippt am Fuß nach rechts
+       und läuft nach oben aus. Buchstabe und Aufwärtskurve zugleich. -->
+  <path d="M17 9v20a7 7 0 0 0 7 7c6 0 9.2-5.6 13-17"
+        stroke="currentColor" stroke-width="4.4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
