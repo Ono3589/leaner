@@ -10,6 +10,11 @@
 
 const KEY = 'leaner.state.v1';
 
+/* Beim Hochladen einer neuen Fassung mitzählen. Steht im Profil ganz
+   unten — so lässt sich auf einen Blick sehen, ob das iPhone noch eine
+   alte Version aus dem Zwischenspeicher bedient. */
+const BUILD = '6 · 11.08.2026';
+
 const DEFAULT_STATE = {
   xpTotal: 0,
   streak: 0,
@@ -437,7 +442,17 @@ function go(tab) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
   view.innerHTML = '';
   view.classList.remove('viewIn');
-  SCREENS[tab]();
+  try {
+    SCREENS[tab]();
+  } catch (e) {
+    // Ein kaputter Screen soll nicht als leere Seite enden
+    console.error('Screen "' + tab + '" konnte nicht aufgebaut werden:', e);
+    view.innerHTML = `
+      <div class="section"><div class="card">
+        <div style="font-weight:600;margin-bottom:6px">Dieser Bereich lässt sich gerade nicht öffnen</div>
+        <div class="tiny muted" style="word-break:break-word">${escapeHtml(e.message || e)}</div>
+      </div></div>`;
+  }
   view.scrollIntoView({ block: 'start' });
   window.scrollTo(0, 0);
   location.hash = tab;
@@ -1233,8 +1248,13 @@ function renderProfile() {
           <button class="btn btn-block" id="diagBtn" style="margin-top:12px">Verbindung prüfen</button>
           <button class="btn btn-ghost btn-block" id="logoutBtn" style="margin-top:6px">Abmelden</button>
         ` : `
-          <div class="tiny muted">Kein Konto verbunden. Dein Fortschritt liegt nur auf diesem Gerät
-          und geht verloren, wenn du die Browserdaten löschst.</div>
+          <div class="tiny muted">${CONFIG.READY
+            ? 'Kein Konto verbunden, obwohl die Zwischenablage eingerichtet ist. Das heißt fast ' +
+              'immer: Dein Gerät bedient dich noch aus einem alten Zwischenspeicher. Unten auf ' +
+              '„Zwischenspeicher leeren".'
+            : 'Kein Konto verbunden. Dein Fortschritt liegt nur auf diesem Gerät und geht ' +
+              'verloren, wenn du die Browserdaten löschst.'}</div>
+          <button class="btn btn-block" id="wipeBtn" style="margin-top:12px">Zwischenspeicher leeren</button>
         `}
       </div>
     </div>
@@ -1261,11 +1281,13 @@ function renderProfile() {
 
     <div class="section">
       <button class="btn btn-ghost btn-block" id="resetBtn" style="color:var(--text-faint)">Fortschritt zurücksetzen</button>
+      <button class="btn btn-ghost btn-block" id="wipeBtn2" style="color:var(--text-faint)">Zwischenspeicher leeren</button>
       <div class="tiny faint center" style="margin-top:14px;line-height:1.5">
         Leaner ersetzt keine ärztliche oder therapeutische Beratung.<br>
         ${Cloud.user
           ? 'Deine Daten liegen in deinem eigenen Konto und sind für niemanden sonst sichtbar.'
-          : 'Alle Daten bleiben lokal auf diesem Gerät.'}
+          : 'Alle Daten bleiben lokal auf diesem Gerät.'}<br>
+        <span style="opacity:.7">Version ${BUILD}</span>
       </div>
     </div>
   `;
@@ -1277,6 +1299,11 @@ function renderProfile() {
 
   const diag = document.getElementById('diagBtn');
   if (diag) diag.addEventListener('click', runDiagnostics);
+
+  ['wipeBtn', 'wipeBtn2'].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', wipeCaches);
+  });
 
   const logout = document.getElementById('logoutBtn');
   if (logout) logout.addEventListener('click', async () => {
@@ -1300,6 +1327,27 @@ function renderProfile() {
    Läuft im angemeldeten Browser und geht die Kette Schritt für
    Schritt durch, damit man nicht raten muss, wo es klemmt.
 ------------------------------------------------------------ */
+
+/* Der häufigste Grund für "meine Änderung kommt nicht an": Der Service
+   Worker bedient weiter aus dem Zwischenspeicher. Das hier räumt ihn ab
+   und lädt frisch. Dein Fortschritt bleibt erhalten — er liegt in
+   localStorage und im Konto, nicht im Zwischenspeicher. */
+async function wipeCaches() {
+  toast('Wird geleert…', 'clock');
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (e) {
+    console.warn('Leeren fehlgeschlagen:', e);
+  }
+  location.reload(true);
+}
 
 async function runDiagnostics() {
   openSheet(`
@@ -1603,7 +1651,20 @@ function startApp() {
    Weiterentwickeln. Mit Backend entscheidet die Sitzung, ob der
    Login oder die App erscheint. */
 async function boot() {
-  if (!Cloud.init()) { startApp(); return; }
+  let connected = false;
+  try {
+    connected = Cloud.init();
+  } catch (e) {
+    // Zum Beispiel, wenn die Bibliothek den Schlüssel nicht akzeptiert
+    console.error('Verbindung konnte nicht aufgebaut werden:', e);
+  }
+
+  if (!connected) {
+    startApp();
+    if (CONFIG.READY) toast('Ohne Konto gestartet — siehe Profil', 'plus');
+    return;
+  }
+
   try {
     const session = await Cloud.session();
     if (!session) { showGate('email'); return; }
@@ -1614,6 +1675,30 @@ async function boot() {
     startApp();
     toast('Offline gestartet — Fortschritt bleibt vorerst lokal', 'clock');
   }
+}
+
+/* Notbremse: Egal was schiefgeht — nach vier Sekunden muss etwas auf
+   dem Bildschirm stehen. Eine weiße Seite ohne Hinweis ist das
+   Schlimmste, was passieren kann, weil sie nichts über die Ursache sagt. */
+setTimeout(() => {
+  if (appEl.hidden && gate.hidden) {
+    console.warn('Start hat zu lange gedauert — App wird lokal geöffnet');
+    startApp();
+    toast('Start hat gehakt — lokal geöffnet', 'clock');
+  }
+}, 4000);
+
+/* Fehler sichtbar machen statt still scheitern lassen */
+addEventListener('error', (e) => surfaceError(e.message));
+addEventListener('unhandledrejection', (e) =>
+  surfaceError(e.reason && e.reason.message ? e.reason.message : String(e.reason)));
+
+let errorShown = false;
+function surfaceError(message) {
+  if (errorShown) return;
+  errorShown = true;
+  if (appEl.hidden && gate.hidden) startApp();
+  toast('Fehler: ' + String(message).slice(0, 80), 'plus');
 }
 
 boot();

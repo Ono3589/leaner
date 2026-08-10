@@ -12,7 +12,7 @@
    Fremde Adressen (Supabase, CDN) fasst der Worker nicht an.
    ============================================================ */
 
-const CACHE = 'leaner-v3';
+const CACHE = 'leaner-v6';
 
 const ASSETS = [
   './',
