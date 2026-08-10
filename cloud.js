@@ -17,7 +17,7 @@ const Cloud = {
 
   init() {
     if (!CONFIG.READY || !window.supabase) return false;
-    this.sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+    this.sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
     });
     return true;
@@ -30,10 +30,43 @@ const Cloud = {
     return data.session;
   },
 
-  /* ---------- Login per 6-stelligem Code ----------
+  /* ---------- Login mit Passwort ----------
+     Verschickt keine Mail und braucht deshalb keinen eigenen
+     Mailversand. Voraussetzung: In Supabase muss "Confirm email"
+     ausgeschaltet sein, sonst wartet die Registrierung auf eine
+     Bestätigungsmail. */
+
+  async signUpPassword(email, password) {
+    const { data, error } = await this.sb.auth.signUp({
+      email: email.trim(),
+      password
+    });
+    if (error) throw error;
+    if (!data.session) {
+      throw new Error(
+        'Supabase wartet auf eine Bestätigungsmail. Schalte unter ' +
+        'Authentication → Sign In / Providers → Email die Option "Confirm email" aus.'
+      );
+    }
+    this.user = data.user;
+    return data.user;
+  },
+
+  async signInPassword(email, password) {
+    const { data, error } = await this.sb.auth.signInWithPassword({
+      email: email.trim(),
+      password
+    });
+    if (error) throw error;
+    this.user = data.user;
+    return data.user;
+  },
+
+  /* ---------- Login per Code ----------
      Bewusst kein Magic Link: Ein Link öffnet auf dem iPhone Safari
      und nicht die installierte App. Ein Code lässt sich einfach
-     abtippen und man bleibt in der App. */
+     abtippen und man bleibt in der App.
+     Braucht eigenen SMTP-Versand — siehe SETUP.md, Schritt 5b. */
 
   async requestCode(email) {
     const { error } = await this.sb.auth.signInWithOtp({
@@ -93,11 +126,106 @@ const Cloud = {
     const { data, error } = await this.sb.functions.invoke('coach', {
       body: { messages, context }
     });
-    if (error) throw error;
-    if (!data || !data.reply) throw new Error('leere Antwort');
+    if (error) throw await describeFnError(error);
+    if (!data || !data.reply) throw new Error('Antwort war leer');
     return data.reply;
+  },
+
+  /* ---------- Selbsttest ----------
+     Prüft die Kette Schritt für Schritt und sagt, wo sie reißt.
+     Ergebnis: Liste aus { ok, label, detail }. */
+
+  async diagnose() {
+    const steps = [];
+    const add = (ok, label, detail) => steps.push({ ok, label, detail });
+
+    add(CONFIG.READY, 'Konfiguration',
+      CONFIG.READY ? CONFIG.SUPABASE_URL : 'SUPABASE_URL oder SUPABASE_KEY fehlt in config.js');
+
+    add(!!window.supabase, 'Supabase-Bibliothek geladen',
+      window.supabase ? 'ok' : 'Das CDN war nicht erreichbar — bist du offline?');
+
+    add(!!this.sb, 'Verbindung aufgebaut', this.sb ? 'ok' : 'Client konnte nicht erstellt werden');
+    if (!this.sb) return steps;
+
+    try {
+      const { data } = await this.sb.auth.getSession();
+      add(!!data.session, 'Angemeldet',
+        data.session ? data.session.user.email : 'Keine gültige Sitzung');
+      if (!data.session) return steps;
+    } catch (e) {
+      add(false, 'Angemeldet', e.message);
+      return steps;
+    }
+
+    try {
+      await this.pull();
+      add(true, 'Datenbank lesen', 'ok');
+    } catch (e) {
+      add(false, 'Datenbank lesen', dbHint(e));
+      return steps;
+    }
+
+    try {
+      const row = await this.pull();
+      await this.push(row && row.state ? row.state : {});
+      add(true, 'Datenbank schreiben', 'ok');
+    } catch (e) {
+      add(false, 'Datenbank schreiben', dbHint(e));
+    }
+
+    try {
+      const { data, error } = await this.sb.functions.invoke('coach', {
+        body: {
+          messages: [{ role: 'me', text: 'Test. Antworte nur mit dem Wort ok.' }],
+          context: { level: 1 }
+        }
+      });
+      if (error) throw await describeFnError(error);
+      add(!!(data && data.reply), 'Coach antwortet',
+        data && data.reply ? data.reply.slice(0, 120) : 'Antwort war leer');
+    } catch (e) {
+      add(false, 'Coach antwortet', e.message);
+    }
+
+    return steps;
   }
 };
+
+/* Supabase verpackt Fehler der Edge Function so, dass die eigentliche
+   Meldung im Response-Body steckt. Hier wird sie herausgeholt — sonst
+   steht überall nur "Edge Function returned a non-2xx status code". */
+async function describeFnError(error) {
+  const res = error && error.context;
+  if (res && typeof res.json === 'function') {
+    try {
+      const body = await res.clone().json();
+      const msg = body.error || body.message;
+      if (msg) return new Error(`${msg} (HTTP ${res.status})`);
+    } catch (e) { /* kein JSON */ }
+  }
+  if (res && res.status === 404) {
+    return new Error('Funktion "coach" nicht gefunden — sie ist noch nicht veröffentlicht (Schritt 7)');
+  }
+  if (res && res.status === 401) {
+    return new Error('Funktion hat die Anmeldung abgelehnt (HTTP 401)');
+  }
+  if (res && res.status === 500) {
+    return new Error('Funktion abgestürzt — meistens fehlt das Secret ANTHROPIC_API_KEY (Schritt 6)');
+  }
+  return new Error(error && error.message ? error.message : 'unbekannter Fehler');
+}
+
+function dbHint(e) {
+  const m = (e && e.message ? e.message : '').toLowerCase();
+  if (m.includes('does not exist') || m.includes('schema cache')) {
+    return 'Tabelle fehlt — schema.sql wurde noch nicht ausgeführt (Schritt 4)';
+  }
+  if (m.includes('row-level security') || m.includes('policy')) {
+    return 'Sicherheitsregeln greifen nicht — schema.sql nochmal komplett ausführen';
+  }
+  return e.message;
+}
 
 /* ============================================================
    Zusammenführen von zwei Ständen

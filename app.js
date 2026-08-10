@@ -1121,7 +1121,9 @@ async function askCoach(text) {
     } catch (e) {
       console.warn('Coach nicht erreichbar:', e.message || e);
       return localCoachReply(text) +
-        `\n\n<i>Das kam gerade aus meinem Offline-Wissen — die Verbindung hat nicht geklappt.</i>`;
+        `\n\n<i>Das kam aus meinem Offline-Wissen, weil der KI-Coach gerade nicht antwortet:\n` +
+        `${escapeHtml(e.message || 'unbekannter Fehler')}\n` +
+        `Unter Profil → Verbindung prüfen siehst du, woran es liegt.</i>`;
     }
   }
   // Ohne Backend kurz warten, damit es sich nicht nach Autotext anfühlt
@@ -1228,6 +1230,7 @@ function renderProfile() {
                 : 'Synchron auf allen deinen Geräten'}</div>
             </span>
           </div>
+          <button class="btn btn-block" id="diagBtn" style="margin-top:12px">Verbindung prüfen</button>
           <button class="btn btn-ghost btn-block" id="logoutBtn" style="margin-top:6px">Abmelden</button>
         ` : `
           <div class="tiny muted">Kein Konto verbunden. Dein Fortschritt liegt nur auf diesem Gerät
@@ -1272,6 +1275,9 @@ function renderProfile() {
     save(); haptic(8); renderProfile();
   }));
 
+  const diag = document.getElementById('diagBtn');
+  if (diag) diag.addEventListener('click', runDiagnostics);
+
   const logout = document.getElementById('logoutBtn');
   if (logout) logout.addEventListener('click', async () => {
     await flushCloudPush();
@@ -1290,6 +1296,54 @@ function renderProfile() {
 }
 
 /* ------------------------------------------------------------
+   Selbsttest
+   Läuft im angemeldeten Browser und geht die Kette Schritt für
+   Schritt durch, damit man nicht raten muss, wo es klemmt.
+------------------------------------------------------------ */
+
+async function runDiagnostics() {
+  openSheet(`
+    <div class="sheet-ico">${icon('activity')}</div>
+    <h2 class="sheet-title">Verbindung prüfen</h2>
+    <p class="muted small" style="margin:0 0 16px">Einen Moment…</p>
+    <div class="stack" id="diagList"></div>
+  `);
+
+  const steps = await Cloud.diagnose();
+  const failed = steps.find((s) => !s.ok);
+
+  sheetBody.innerHTML = `
+    <div class="sheet-ico">${icon(failed ? 'target' : 'check')}</div>
+    <h2 class="sheet-title">${failed ? 'Hier klemmt es' : 'Alles in Ordnung'}</h2>
+    <p class="muted small" style="margin:0 0 16px">
+      ${failed
+        ? 'Der erste rot markierte Punkt ist die Ursache — alles danach hängt davon ab.'
+        : 'Login, Datenbank und Coach antworten alle sauber.'}
+    </p>
+    <div class="stack">
+      ${steps.map((s) => `
+        <div class="item" style="align-items:flex-start">
+          <span class="item-ico ${s.ok ? 'i-food' : 'i-move'}" style="margin-top:2px">
+            ${icon(s.ok ? 'check' : 'plus')}
+          </span>
+          <span class="grow">
+            <div class="item-title">${s.label}</div>
+            <div class="item-meta" style="word-break:break-word">${escapeHtml(s.detail || '')}</div>
+          </span>
+        </div>`).join('')}
+    </div>
+    ${failed ? `<div class="note" style="margin-top:16px">
+      Die Schrittnummern in den Meldungen beziehen sich auf <b>SETUP.md</b>.
+    </div>` : ''}
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+/* ------------------------------------------------------------
    6) LOGIN
    Anmeldung per 6-stelligem Code statt Magic Link: Ein Link
    öffnet auf dem iPhone Safari und nicht die installierte App.
@@ -1302,16 +1356,112 @@ const appEl = document.getElementById('app');
 function showGate(step, email, message) {
   appEl.hidden = true;
   gate.hidden = false;
+
+  if (CONFIG.AUTH_MODE === 'password') {
+    const signup = step === 'signup';
+    gate.innerHTML = gatePassword(signup, email, message);
+    wireGatePassword(signup);
+    return;
+  }
+
   gate.innerHTML = step === 'code' ? gateCode(email, message) : gateEmail(message);
   wireGate(step, email);
 }
 
+function gateMark() {
+  return `<div class="gate-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS.mark}"/></svg></div>`;
+}
+
+/* ---------- Passwort-Variante ---------- */
+
+function gatePassword(signup, email, message) {
+  return `<div class="gate-inner">
+    ${gateMark()}
+    <h1>${signup ? 'Konto anlegen' : 'Willkommen zurück'}</h1>
+    <p>${signup
+      ? 'Lass dir das Passwort von deinem Passwortmanager erzeugen und dort speichern — merken musst du es dir nicht.'
+      : 'Melde dich an, damit dein Fortschritt auf iPhone und MacBook derselbe ist.'}</p>
+    <input id="gEmail" type="email" inputmode="email" autocomplete="email"
+           placeholder="du@beispiel.de" value="${email || ''}">
+    <input id="gPass" type="password" enterkeyhint="go"
+           autocomplete="${signup ? 'new-password' : 'current-password'}"
+           placeholder="Passwort">
+    <button class="btn btn-primary btn-block" id="gGo">${signup ? 'Konto anlegen' : 'Anmelden'}</button>
+    <p class="gate-err" id="gErr">${message || ''}</p>
+    <p class="gate-foot">
+      <span class="gate-link" id="gSwitch">${signup
+        ? 'Ich habe schon ein Konto'
+        : 'Noch kein Konto? Jetzt anlegen'}</span>
+    </p>
+  </div>`;
+}
+
+function wireGatePassword(signup) {
+  const email = document.getElementById('gEmail');
+  const pass = document.getElementById('gPass');
+  const btn = document.getElementById('gGo');
+  const err = document.getElementById('gErr');
+  const fail = (m) => { err.textContent = m; };
+
+  (email.value ? pass : email).focus();
+
+  const submit = async () => {
+    const mail = email.value.trim();
+    const pw = pass.value;
+    if (!/^\S+@\S+\.\S+$/.test(mail)) return fail('Das sieht noch nicht nach einer E-Mail aus.');
+    if (pw.length < 8) return fail('Mindestens 8 Zeichen. Lass es deinen Passwortmanager erzeugen.');
+
+    btn.disabled = true;
+    btn.textContent = 'Moment…';
+    fail('');
+    try {
+      if (signup) await Cloud.signUpPassword(mail, pw);
+      else await Cloud.signInPassword(mail, pw);
+      await afterLogin();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = signup ? 'Konto anlegen' : 'Anmelden';
+      fail(authError(e, signup));
+    }
+  };
+
+  btn.addEventListener('click', submit);
+  [email, pass].forEach((el) =>
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); }));
+  document.getElementById('gSwitch').addEventListener('click', () =>
+    showGate(signup ? 'signin' : 'signup', email.value.trim()));
+}
+
+/* Supabase-Meldungen sind englisch und technisch — hier in etwas
+   übersetzt, mit dem man auch etwas anfangen kann. */
+function authError(e, signup) {
+  const m = (e && e.message ? e.message : '').toLowerCase();
+  if (m.includes('invalid login credentials')) {
+    return 'E-Mail oder Passwort stimmt nicht. Falls du noch kein Konto hast: unten anlegen.';
+  }
+  if (m.includes('already registered') || m.includes('already been registered')) {
+    return 'Für diese E-Mail gibt es schon ein Konto. Meld dich einfach an.';
+  }
+  if (m.includes('password') && m.includes('short')) {
+    return 'Das Passwort ist zu kurz.';
+  }
+  if (m.includes('confirm email') || m.includes('bestätigungsmail')) {
+    return e.message;
+  }
+  if (m.includes('failed to fetch') || m.includes('network')) {
+    return 'Keine Verbindung. Prüf dein Netz und versuch es nochmal.';
+  }
+  return e.message || (signup ? 'Anlegen hat nicht geklappt.' : 'Anmelden hat nicht geklappt.');
+}
+
+/* ---------- Code-Variante ---------- */
+
 function gateEmail(message) {
   return `<div class="gate-inner">
-    <div class="gate-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS.mark}"/></svg></div>
+    ${gateMark()}
     <h1>Willkommen bei leaner</h1>
-    <p>Trag deine E-Mail ein. Du bekommst einen sechsstelligen Code —
+    <p>Trag deine E-Mail ein. Du bekommst einen Zahlencode —
        kein Passwort, das du dir merken musst.</p>
     <input id="gEmail" type="email" inputmode="email" autocomplete="email"
            enterkeyhint="go" placeholder="du@beispiel.de">
@@ -1324,13 +1474,11 @@ function gateEmail(message) {
 
 function gateCode(email, message) {
   return `<div class="gate-inner">
-    <div class="gate-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS.mark}"/></svg></div>
+    ${gateMark()}
     <h1>Code eingeben</h1>
-    <p>Wir haben dir einen sechsstelligen Code an <b>${email}</b> geschickt.
-       Er gilt eine Stunde.</p>
+    <p>Wir haben dir einen Code an <b>${email}</b> geschickt. Er gilt eine Stunde.</p>
     <input id="gCode" class="code" type="text" inputmode="numeric" autocomplete="one-time-code"
-           maxlength="6" enterkeyhint="go" placeholder="000000">
+           maxlength="8" enterkeyhint="go" placeholder="000000">
     <button class="btn btn-primary btn-block" id="gVerify">Anmelden</button>
     <p class="gate-err" id="gErr">${message || ''}</p>
     <p class="gate-foot"><span class="gate-link" id="gBack">Andere E-Mail verwenden</span></p>
@@ -1347,8 +1495,9 @@ function wireGate(step, email) {
     input.focus();
 
     const submit = async () => {
+      // Je nach Projekt schickt Supabase 6 oder 8 Ziffern
       const code = input.value.replace(/\D/g, '');
-      if (code.length !== 6) return fail('Der Code hat sechs Ziffern.');
+      if (code.length < 6) return fail('Der Code ist noch nicht vollständig.');
       btn.disabled = true; btn.textContent = 'Moment…'; fail('');
       try {
         await Cloud.verifyCode(email, code);
