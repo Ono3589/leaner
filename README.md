@@ -58,6 +58,8 @@ Danach startet Leaner im Vollbild, mit eigenem Icon, ohne Safari-Leiste.
 | `index.html` | App-Shell, Sheet-Container. Marke und Tab-Bar werden aus dem Icon-Set gebaut |
 | `styles.css` | Design-System: Farbtokens für Hell und Dunkel, Komponenten, Safe-Area, Reduced-Motion |
 | `icons.js` | Das komplette Icon-Set als Pfaddaten plus `icon('name')` |
+| `foods.js` | Zutaten-Datenbank mit Nährwerten pro 100 g plus Suche |
+| `nutrition.js` | Nutri-Score, Grundumsatz, Bedarf, Defizitgrenzen |
 | `data.js` | Sämtliche Inhalte — Rezepte, Mindfulness, Bewegung, Fasten, Quests, Badges, Coach-Regeln |
 | `app.js` | State, Gamification, Router, alle fünf Screens, Timer, Login-Gate |
 | `config.js` | Die zwei öffentlichen Supabase-Werte. Ohne sie läuft alles rein lokal |
@@ -115,8 +117,8 @@ Alles andere ist Graustufe. Farbe erscheint nur dort, wo sie etwas unterscheidet
 
 ## Die fünf Screens
 
-**Heute** — Fortschrittsring, fünf Tages-Quests, Level-Fortschritt, vier Schnellstart-Kacheln.
-**Essen** — 8 Rezepte, filterbar nach Aufwand statt nach Kalorien. Detailansicht mit Zutaten, max. 5 Schritten und einem „Wenn's heute nicht geht"-Fallback.
+**Heute** — Fortschrittsring, fünf Tages-Quests, Kalorienstand des Tages, Level-Fortschritt, vier Schnellstart-Kacheln.
+**Essen** — zwei Bereiche: **Tagebuch** mit Mahlzeiten und Makros, **Rezepte** mit Nutri-Score. Eigene Rezepte lassen sich anlegen; Nährwerte und Score entstehen automatisch aus den Zutaten.
 **Fokus** — Fasten-Timer (überlebt Reload und App-Neustart), Atemübungen mit animiertem Orb, Bewegungs-Timer.
 **Coach** — Chat mit Vorschlagschips, kontextbewusst zum eigenen Fortschritt.
 **Profil** — Level, Statistiken, 16 Badges, Einstellungen.
@@ -136,6 +138,54 @@ Diese Punkte sind keine Kosmetik — sie sind der Grund, warum die App anders au
 - **Keine roten Warnfarben, kein Shaming.** Verpasste Ziele werden neutral dargestellt.
 - **Sanfter Modus** und **Weniger Animation** sind abschaltbar, `prefers-reduced-motion` wird respektiert.
 - **Timer mit Zeitstempel statt Zähler.** Der Fasten-Timer läuft weiter, auch wenn die App geschlossen wird — Vergessen soll den Fortschritt nicht kosten.
+
+---
+
+## Nutri-Score
+
+Umgesetzt ist die Fassung von 2023, wie sie seit dem 31. Dezember 2023 gilt.
+Bewertet werden 100 g des fertigen Gerichts: Energie, Zucker, gesättigte Fette und
+Salz zählen dagegen, Obst und Gemüse, Ballaststoffe und Eiweiß dafür. Ab elf
+negativen Punkten fällt das Eiweiß aus der Rechnung — sonst könnten sehr salzige
+oder sehr fette Gerichte ihre Note über den Eiweißgehalt schönrechnen.
+
+Eigene Grenzwerte gelten für Öle und Fette (Verhältnis gesättigter Fette zum
+Gesamtfett statt absoluter Menge), für Getränke und für rotes Fleisch.
+
+Die Rechnung ist gegen zwölf bekannte Produkte geprüft — Wasser, Cola, Orangensaft,
+Olivenöl, Kokosöl, Vollmilch, Brokkoli, Haferflocken, Chips, Salami, Gouda,
+Vollkornbrot. Alle treffen die erwartete Note.
+
+**Was er nicht ist:** ein Urteil über eine Mahlzeit. Der Nutri-Score wurde für
+verpackte Produkte entwickelt und vergleicht innerhalb einer Produktgruppe. Ein
+Gericht mit viel Olivenöl, Nüssen oder Käse bekommt systematisch eine schlechtere
+Note, ohne deshalb ungesund zu sein. In der App steht deshalb überall dabei,
+wie die Note zustande kommt und was sie aussagt.
+
+---
+
+## Kalorienbedarf
+
+Grundumsatz nach **Mifflin-St Jeor**, multipliziert mit einem Aktivitätsfaktor
+zwischen 1,2 und 1,9. Daraus ergibt sich der Gesamtbedarf, davon abgezogen das
+eingestellte Defizit.
+
+Die Grenzen sind fest verdrahtet und lassen sich in der Oberfläche nicht
+überschreiben:
+
+- **Nie unter den Grundumsatz.** Der Regler endet dort, wo das Ziel den
+  Grundumsatz erreichen würde.
+- **Höchstens 500 kcal** oder 20 Prozent des Gesamtbedarfs, je nachdem was
+  kleiner ist.
+- **Ab einem BMI unter 20** wird kein Defizit empfohlen, sondern Krafttraining
+  bei etwa gleichbleibenden Kalorien.
+- Bei einem BMI unter 18,5 weist die App auf ärztliche Abklärung hin.
+
+Der Coach kennt diese Zahlen und darf sie einordnen, unterliegt aber denselben
+Grenzen — sie stehen in seiner Systemanweisung.
+
+Eiweiß- und Fettziele werden nach Körpergewicht abgeleitet (1,6 g beziehungsweise
+0,9 g pro Kilo), die Kohlenhydrate ergeben sich aus dem Rest.
 
 ---
 

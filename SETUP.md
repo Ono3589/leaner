@@ -75,27 +75,39 @@ nicht, das kommt jetzt.
    erzeugen und dort speichern. Du brauchst es im Alltag nicht.
 4. Zwei bis drei Minuten warten, bis das Projekt bereitsteht.
 
-Dann die beiden Werte holen: **Project Settings → API**
+Dann die beiden Werte holen:
 
-- **Project URL** — sieht aus wie `https://abcdefgh.supabase.co`
-- **anon public** key — ein langer Text, beginnt mit `eyJ`
+**Project URL** — unter *Project Settings → Data API*.
+Sieht aus wie `https://abcdefgh.supabase.co`.
+
+> Nur diese Adresse, **ohne** `/rest/v1/` am Ende. Wenn du sie irgendwo mit
+> angehängtem Pfad kopierst: alles ab `/rest` weglassen. Die Bibliothek hängt
+> sich den Rest selbst an.
+
+**Publishable key** — unter *Project Settings → API Keys*.
+Beginnt mit `sb_publishable_`.
+
+> Falls du nach einem „anon key" suchst: den gibt es unter dem Namen nicht mehr.
+> Supabase hat ihn 2025 in **Publishable key** umbenannt, der alte wird bis Ende
+> 2026 abgeschaltet. Ältere Projekte zeigen beide nebeneinander — nimm dann den
+> mit `sb_publishable_`. Wenn noch keiner da ist: **Create new API keys** klicken.
 
 Beide in `config.js` eintragen:
 
 ```js
 const CONFIG = {
   SUPABASE_URL: 'https://abcdefgh.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOi…',
+  SUPABASE_KEY: 'sb_publishable_…',
   CLOUD: true
 };
 ```
 
-Diese zwei Werte dürfen öffentlich sein. Der anon key sagt nur „diese Anfrage
-kommt aus der App". Was jemand damit tatsächlich sehen darf, entscheiden die
-Regeln aus Schritt 4.
+Diese zwei Werte dürfen öffentlich sein. Der Publishable key sagt nur „diese
+Anfrage kommt aus der App". Was jemand damit tatsächlich sehen darf, entscheiden
+die Regeln aus Schritt 4.
 
-> Der **service_role** key im selben Menü darf dagegen nirgendwo hin außer in
-> Supabase selbst. Der hebelt alle Regeln aus.
+> Der **Secret key** (`sb_secret_…`, früher `service_role`) im selben Menü darf
+> dagegen nirgendwo hin außer in Supabase selbst. Der hebelt alle Regeln aus.
 
 ---
 
@@ -116,15 +128,82 @@ dir nicht die Rechnung hoch.
 
 ---
 
-## Schritt 5 — Login auf Zahlencode umstellen
+## Schritt 5 — Anmeldung einschalten
 
-Supabase verschickt standardmäßig einen Link. Auf dem iPhone öffnet ein Link
-aber Safari und nicht deine installierte App — du wärst wieder draußen.
-Deshalb ein sechsstelliger Code zum Abtippen.
+Die App ist auf **E-Mail und Passwort** eingestellt. Der Grund ist praktischer
+Natur: Supabase verschickt dabei keine einzige Mail, also brauchst du weder
+eigenen Mailversand noch angepasste Vorlagen.
 
-1. **Authentication → Emails** (je nach Ansicht unter *Email Templates*).
-2. Vorlage **Magic Link** öffnen.
-3. Den Inhalt ersetzen durch:
+Der naheliegende Weg — ein Link per Mail — funktioniert auf dem iPhone ohnehin
+nicht gut: Ein Link öffnet Safari und nicht deine installierte App, und die
+beiden teilen sich keine Anmeldung. Und seit Juni 2026 lässt Supabase bei neuen
+Projekten die Mailvorlagen nur noch mit eigenem SMTP-Versand anpassen.
+
+Eine einzige Einstellung ist nötig:
+
+1. **Authentication → Sign In / Providers → Email**
+2. **Confirm email** ausschalten.
+3. Speichern.
+
+Ohne diesen Schritt wartet die Registrierung auf eine Bestätigungsmail, die
+mangels Mailversand nie ankommt.
+
+> Warum das hier vertretbar ist: Die Bestätigungsmail soll normalerweise
+> verhindern, dass jemand ein Konto auf eine fremde Adresse anlegt. Bei einer
+> App, die nur du benutzt, gibt es niemanden, dem das schaden könnte. Sobald
+> andere Leute dazukommen, schaltest du sie wieder ein — dann brauchst du
+> ohnehin den Mailversand aus Schritt 5b.
+
+**Jetzt testbar:** `config.js` mit deinen echten Werten zu GitHub hochladen,
+eine Minute warten, deine Pages-Adresse aufrufen. Unten auf *Konto anlegen*,
+E-Mail eintragen, Passwort vom Passwortmanager erzeugen lassen — du bist drin.
+Dein Fortschritt liegt ab sofort in deinem Konto. Der Coach antwortet noch nach
+Regeln, das kommt in Schritt 6 und 7.
+
+---
+
+## Schritt 5b — Optional: Code per Mail statt Passwort
+
+Erst relevant, wenn du kein Passwort willst, Erinnerungsmails planst oder
+weitere Leute die App nutzen sollen. Sonst überspringen.
+
+**Eigenen Mailversand einrichten.** Der eingebaute Versand von Supabase ist auf
+2 Mails pro Stunde begrenzt und liefert nur an Adressen aus deinem eigenen Team.
+Dein STRATO-Postfach löst beides — du brauchst kein weiteres Konto.
+
+1. Bei STRATO im Kundenbereich ein Postfach anlegen, zum Beispiel
+   `leaner@deine-domain.de`. Ein eigenes Postfach ist besser als deine
+   Hauptadresse: Du kannst das Passwort jederzeit tauschen, ohne dass dein
+   privater Mailverkehr betroffen ist.
+2. In Supabase unter **Project Settings → Authentication → SMTP Settings**
+   den eigenen Versand einschalten und eintragen:
+
+| Feld | Wert |
+|---|---|
+| Host | `smtp.strato.de` |
+| Port | `465` |
+| Username | die vollständige Adresse, z. B. `leaner@deine-domain.de` |
+| Password | das Passwort **dieses Postfachs** (nicht dein STRATO-Kundenpasswort) |
+| Sender email | dieselbe Adresse wie der Username |
+| Sender name | `Leaner` |
+
+3. Speichern, dann unter **Authentication → Rate Limits** das Limit für
+   E-Mails hochsetzen. Nach dem Umstellen auf eigenen Versand steht es
+   zunächst bei 30 pro Stunde.
+
+**Wenn es nicht durchgeht:**
+
+- Port `587` statt `465` versuchen. STRATO nennt 465 als Standard für
+  Mailprogramme, manche Serverdienste kommen mit 587 besser klar.
+- Absenderadresse muss exakt dem Postfach entsprechen, sonst weist STRATO
+  die Mail ab.
+- Frisch angelegte STRATO-Postfächer stehen 30 Tage im Probestatus und dürfen
+  maximal 100 Mails pro Stunde verschicken. Für Login-Codes ist das reichlich.
+- Landen Mails im Spam: bei STRATO prüfen, ob für die Domain **DKIM** aktiv ist.
+  SPF ist bei STRATO-gehosteten Domains in der Regel schon gesetzt.
+
+**Danach die Vorlage umstellen.** Unter **Authentication → Emails** die Vorlage
+*Magic Link or OTP* öffnen und ersetzen durch:
 
 ```html
 <h2>Dein Code für Leaner</h2>
@@ -133,28 +212,38 @@ Deshalb ein sechsstelliger Code zum Abtippen.
 <p>Der Code gilt eine Stunde. Wenn du ihn nicht angefordert hast, ignorier diese Mail.</p>
 ```
 
-Entscheidend ist `{{ .Token }}` — das ist der Code. Sobald der drinsteht,
-verschickt Supabase ihn statt eines Links.
+Entscheidend ist `{{ .Token }}`: Steht dort `{{ .ConfirmationURL }}`, verschickt
+Supabase einen Link — mit `{{ .Token }}` einen Zahlencode.
 
-4. Speichern.
+**Zuletzt in `config.js`** umstellen:
 
-> Der eingebaute Mailversand von Supabase ist auf wenige Mails pro Stunde
-> begrenzt. Für dich allein reicht das. Wenn später mehr Leute die App nutzen,
-> unter *Authentication → SMTP Settings* einen eigenen Versand eintragen
-> (Resend, Postmark oder ähnlich).
+```js
+AUTH_MODE: 'code'
+```
 
-**Jetzt testbar:** `config.js` mit den echten Werten zu GitHub hochladen,
-eine Minute warten, deine Pages-Adresse aufrufen. E-Mail eintragen, Code aus
-dem Postfach abtippen — du bist drin, und dein Fortschritt liegt ab sofort in
-deinem Konto. Der Coach antwortet noch nach Regeln, das ist Schritt 6 und 7.
+Die App zeigt dann statt der Passwortmaske die Codeeingabe. Ob dein Projekt
+sechs oder acht Ziffern verschickt, steht unter *Authentication → Emails*; die
+App nimmt beides an.
 
 ---
 
 ## Schritt 6 — Anthropic-API-Key
 
+> **Ein Claude-Pro-Abo hilft hier nicht.** Das Abo gilt für die Claude-Apps und
+> Claude Code, nicht für API-Zugriffe aus eigenen Anwendungen. Abo und API sind
+> getrennte Systeme mit getrennter Abrechnung — du brauchst zusätzlich ein
+> API-Guthaben. Ärgerlich, aber daran führt kein Weg vorbei.
+
 1. Auf [console.anthropic.com](https://console.anthropic.com) ein Konto anlegen.
-2. Unter **Billing** ein Guthaben einrichten. Fang klein an, 5 $ reichen zum
-   Ausprobieren lange.
+   Dieselbe E-Mail wie beim Abo geht, es bleiben trotzdem getrennte Konten.
+2. Unter **Billing** ein Guthaben einrichten. Fang klein an, 5 $ reichen lange.
+
+   Zur Einordnung: Eine Coach-Antwort kostet ungefähr einen Cent. Bei zehn
+   Fragen am Tag sind das rund 3 $ im Monat — realistisch deutlich weniger,
+   weil man einen Coach nicht täglich zehnmal fragt. Wer das noch drücken will,
+   ändert in `supabase/functions/coach/index.ts` die Zeile
+   `const MODEL = 'claude-sonnet-5'` auf `'claude-haiku-4-5-20251001'`.
+   Spürbar günstiger, spürbar knapper in den Antworten.
 3. Unter **API Keys** einen Key erstellen. Er wird **einmal** angezeigt —
    direkt in deinen Passwortmanager.
 4. Zurück in Supabase: **Edge Functions → Secrets** (je nach Ansicht unter
@@ -212,16 +301,76 @@ auf dem iPhone abhakt und morgens den Mac aufklappt, verliert nichts.
 
 ---
 
-## Wenn du etwas änderst
+## Änderungen veröffentlichen
 
-1. Datei lokal bearbeiten und speichern.
-2. Zu GitHub hochladen (Drag-and-drop oder `git push`).
-3. Etwa eine Minute warten.
-4. Auf dem iPhone die App **komplett schließen** (App-Umschalter, hochwischen)
-   und neu öffnen. Sonst bedient dich der Service Worker aus dem Zwischenspeicher.
+Drag-and-drop im Browser funktioniert, hat aber zwei Tücken: Man vergisst leicht
+eine Datei, und die Versionsnummer muss man von Hand an drei Stellen hochzählen.
+Beides hat uns beim Einrichten Stunden gekostet.
 
-Bei größeren Änderungen an CSS oder JS die Zeile `const CACHE = 'leaner-v3'`
-in `sw.js` hochzählen. Das erzwingt einen frischen Zwischenspeicher.
+Deshalb einmal Git einrichten — danach ist Veröffentlichen ein Befehl.
+
+### Einmalige Einrichtung
+
+**Weg A — mit GitHub Desktop, ohne Terminal**
+
+1. [GitHub Desktop](https://desktop.github.com) laden und mit deinem Konto anmelden.
+2. **File → Add Local Repository** → den Ordner `leaner` auswählen.
+   Falls „not a git repository" erscheint: auf **create a repository** klicken.
+3. **Publish repository** → Name `leaner`, Haken bei *Keep this code private*
+   **entfernen** (GitHub Pages braucht ein öffentliches Repository im Gratistarif).
+
+Ab dann: Änderungen erscheinen links in der Liste, unten eine kurze Beschreibung
+eintippen, **Commit to main**, dann **Push origin**.
+
+**Weg B — im Terminal**
+
+```bash
+# Einmalig: GitHub-Anmeldung über den Browser
+brew install gh
+gh auth login          # "GitHub.com" → "HTTPS" → im Browser bestätigen
+
+cd ~/Documents/Privatprojekte/leaner
+git init
+git add -A
+git commit -m "Leaner"
+git branch -M main
+git remote add origin https://github.com/ono3589/leaner.git
+git push -u origin main
+chmod +x deploy.sh
+```
+
+`gh auth login` bestätigt die Anmeldung im Browser — du musst nirgends ein
+Passwort oder einen Token abtippen.
+
+### Danach: veröffentlichen
+
+```bash
+./deploy.sh
+```
+
+Das Skript zählt die Versionsnummer in `index.html`, `app.js` und `sw.js`
+gemeinsam hoch, prüft, ob das überall gegriffen hat, warnt wenn `config.js`
+noch Platzhalter enthält, und lädt alles hoch. Mit eigener Beschreibung:
+
+```bash
+./deploy.sh "Rezept-Editor und Nutri-Score"
+```
+
+Danach etwa eine Minute warten, auf dem iPhone die App komplett schließen
+(App-Umschalter, hochwischen) und neu öffnen. Unten im Profil muss die neue
+Versionsnummer stehen. Steht dort eine andere, hilft
+**Profil → Zwischenspeicher leeren**.
+
+> **Warum die Versionsnummer nötig ist:** GitHub Pages erlaubt Browsern, Dateien
+> zehn Minuten zu behalten. Ohne das `?v=` lädt dein Browser trotz Neuladen die
+> alte `app.js` oder `config.js` — und du suchst einen Fehler, den es längst
+> nicht mehr gibt.
+
+### Wenn du doch von Hand hochlädst
+
+Dann müssen **alle** geänderten Dateien mit, und die Versionsnummer muss an allen
+drei Stellen dieselbe sein. Eine vergessene Datei ist der häufigste Grund dafür,
+dass eine Änderung scheinbar nichts bewirkt.
 
 ---
 

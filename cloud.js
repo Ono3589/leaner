@@ -286,6 +286,29 @@ function mergeState(local, remote, remoteNewer) {
   const lc = (local.chat || []).length, rc = (remote.chat || []).length;
   out.chat = rc > lc ? remote.chat : local.chat;
 
+  // Körperdaten: vom zuletzt geschriebenen Stand
+  out.profile = remoteNewer && remote.profile ? remote.profile : (local.profile || remote.profile);
+
+  // Eigene Rezepte: vereinigen, bei gleicher id gewinnt der neuere Stand
+  const byId = new Map();
+  (remoteNewer ? (local.myRecipes || []) : (remote.myRecipes || [])).forEach((r) => byId.set(r.id, r));
+  (remoteNewer ? (remote.myRecipes || []) : (local.myRecipes || [])).forEach((r) => byId.set(r.id, r));
+  out.myRecipes = Array.from(byId.values());
+
+  // Tagebuch: Tag für Tag zusammenführen, Einträge über ihre eid entdoppeln
+  out.diary = {};
+  const days = new Set([...Object.keys(local.diary || {}), ...Object.keys(remote.diary || {})]);
+  days.forEach((day) => {
+    const seen = new Set();
+    out.diary[day] = [...((local.diary || {})[day] || []), ...((remote.diary || {})[day] || [])]
+      .filter((e) => {
+        const key = e.eid || (e.name + e.kcal + e.meal);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  });
+
   return out;
 }
 

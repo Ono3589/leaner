@@ -535,6 +535,163 @@ p.screen-sub { color: var(--text-dim); margin: 0 0 4px; font-size: 15px; }
 .switch.on { background: var(--accent); border-color: var(--accent); }
 .switch.on::after { left: 21px; background: var(--on-accent); }
 
+/* ---------- Nutri-Score ---------- */
+
+.ns {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 7px; flex: none;
+  font-weight: 700; font-size: 14px; color: #fff;
+  letter-spacing: 0;
+}
+.ns-A { background: #1E8759; }
+.ns-B { background: #6FA83C; }
+.ns-C { background: #D2A32B; }
+.ns-D { background: #D4762A; }
+.ns-E { background: #C2452F; }
+.ns-lg { width: 40px; height: 40px; border-radius: 11px; font-size: 21px; }
+
+.ns-scale { display: flex; gap: 4px; margin: 4px 0 0; }
+.ns-scale span {
+  flex: 1; height: 26px; border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+  opacity: .22; transition: opacity .2s var(--ease);
+}
+.ns-scale span.on { opacity: 1; }
+
+/* ---------- Segmentierte Umschaltung ---------- */
+
+.seg {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  background: var(--surface-2); border-radius: var(--r-md);
+  padding: 3px; gap: 3px; margin-bottom: 4px;
+}
+.seg button {
+  min-height: 36px; border-radius: 9px;
+  font-size: 14px; font-weight: 550; color: var(--text-dim);
+  transition: all .18s var(--ease);
+}
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+
+/* ---------- Kalorien und Makros ---------- */
+
+.kcal-head { display: flex; align-items: baseline; gap: 8px; }
+.kcal-big { font-size: 32px; font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.kcal-of { font-size: 14px; color: var(--text-dim); }
+
+.macro-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.macro { }
+.macro-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 5px; }
+.macro-name { color: var(--text-dim); font-weight: 550; }
+.macro-val { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 99px; transition: width .6s var(--ease); }
+.bar-p > i { background: var(--mind); }
+.bar-c > i { background: var(--fast); }
+.bar-f > i { background: var(--move); }
+.bar-k > i { background: var(--accent); }
+.bar.over > i { background: var(--move); }
+
+/* ---------- Tagebuch ---------- */
+
+.meal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 20px 0 8px;
+}
+.meal-name { font-size: 13.5px; font-weight: 600; }
+.meal-kcal { font-size: 12.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.meal-add {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--line); color: var(--text-dim);
+  display: grid; place-items: center;
+}
+.meal-add .ic { width: 15px; height: 15px; }
+
+.entry {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.entry + .entry { margin-top: 6px; }
+.entry-name { font-size: 14.5px; font-weight: 550; }
+.entry-sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
+.entry-kcal { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.entry-del { color: var(--text-faint); padding: 4px; }
+.entry-del .ic { width: 16px; height: 16px; }
+.empty-meal { font-size: 13px; color: var(--text-faint); padding: 6px 2px; }
+
+/* ---------- Rezept-Editor, Zutatensuche ---------- */
+
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-faint); margin-bottom: 5px; }
+.field input, .field textarea, .field select {
+  width: 100%; min-height: 44px; padding: 11px 14px;
+  border-radius: var(--r-md); border: 1px solid var(--line);
+  background: var(--surface); outline: none; font-size: 16px;
+}
+.field textarea { min-height: 90px; resize: vertical; line-height: 1.45; }
+.field input:focus, .field textarea:focus { border-color: var(--text-faint); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.search-wrap { position: relative; }
+.search-results {
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); margin-top: 6px; overflow: hidden;
+}
+.search-results:empty { display: none; }
+.sr {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; width: 100%; text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sr:last-child { border-bottom: 0; }
+.sr-name { font-size: 14.5px; font-weight: 550; }
+.sr-cat { font-size: 11.5px; color: var(--text-faint); }
+.sr-kcal { font-size: 12.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+.ing-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--line-soft);
+}
+.ing-row:last-child { border-bottom: 0; }
+.ing-name { font-size: 14.5px; }
+.ing-g {
+  width: 78px; height: 38px; text-align: right; padding: 0 10px;
+  border-radius: 9px; border: 1px solid var(--line);
+  background: var(--surface); outline: none; font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.ing-del { color: var(--text-faint); padding: 4px; }
+.ing-del .ic { width: 16px; height: 16px; }
+
+/* ---------- Regler ---------- */
+
+.slider-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.slider-val { font-size: 20px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+input[type=range] {
+  width: 100%; height: 30px; appearance: none; background: transparent; outline: none;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 99px; background: var(--line);
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); margin-top: -11px;
+  border: 3px solid var(--bg); box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+input[type=range]::-moz-range-track { height: 4px; border-radius: 99px; background: var(--line); }
+input[type=range]::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+  border: 3px solid var(--bg);
+}
+
+.note-warn {
+  border-radius: var(--r-md); padding: 13px 15px;
+  background: var(--move-bg); color: var(--move);
+  font-size: 13.5px; line-height: 1.5;
+}
+.note-warn b { font-weight: 600; }
+
 /* ---------- Login ---------- */
 
 .gate {

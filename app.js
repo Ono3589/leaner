@@ -13,7 +13,7 @@ const KEY = 'leaner.state.v1';
 /* Beim Hochladen einer neuen Fassung mitzählen. Steht im Profil ganz
    unten — so lässt sich auf einen Blick sehen, ob das iPhone noch eine
    alte Version aus dem Zwischenspeicher bedient. */
-const BUILD = '6 · 11.08.2026';
+const BUILD = '8 · 11.08.2026';
 
 const DEFAULT_STATE = {
   xpTotal: 0,
@@ -39,6 +39,15 @@ const DEFAULT_STATE = {
   // Fasten
   fastProtocol: 'f2',
   fastStart: null,
+  // Körperdaten und Ziel
+  profile: {
+    sex: 'm', age: null, heightCm: null, weightKg: null,
+    activity: 'leicht', deficit: 0
+  },
+  // Eigene Rezepte und Essenstagebuch
+  myRecipes: [],
+  diary: {},          // { '2026-08-11': [ { id, name, meal, kcal, p, ch, f, portions } ] }
+
   // Einstellungen
   gentleMode: true,
   reduceMotion: false,
@@ -520,6 +529,27 @@ function renderHome() {
       </div>
     </div>
 
+    ${(() => {
+      const goal = macroTargets(S.profile);
+      if (!goal) return '';
+      const t = dayTotals();
+      const pct = Math.min(100, Math.round(t.kcal / goal.kcal * 100));
+      return `
+        <div class="section">
+          <button class="card" id="kcalCard" style="width:100%;text-align:left">
+            <div class="kcal-head">
+              <span class="kcal-big">${Math.round(t.kcal)}</span>
+              <span class="kcal-of">von ${goal.kcal} kcal</span>
+              <span class="grow"></span>
+              <span class="tiny faint">${Math.round(t.p)} g Eiweiß</span>
+            </div>
+            <div class="bar bar-k ${t.kcal > goal.kcal * 1.05 ? 'over' : ''}" style="margin-top:10px">
+              <i style="width:${pct}%"></i>
+            </div>
+          </button>
+        </div>`;
+    })()}
+
     <div class="section">
       <div class="section-head">
         <h3 class="section-title">Deine 5 heute</h3>
@@ -579,6 +609,9 @@ function renderHome() {
     setTimeout(renderHome, 900);
   });
 
+  const kcalCard = view.querySelector('#kcalCard');
+  if (kcalCard) kcalCard.addEventListener('click', () => { foodTab = 'diary'; go('food'); });
+
   view.querySelectorAll('[data-quick]').forEach((b) => {
     b.addEventListener('click', () => {
       haptic(8);
@@ -586,7 +619,7 @@ function renderHome() {
       if (k === 'fast') go('focus');
       if (k === 'breath') { go('focus'); setTimeout(() => openMindful(DATA.mindful[0]), 260); }
       if (k === 'move') { go('focus'); setTimeout(() => openMovement(DATA.movement[0]), 260); }
-      if (k === 'eat') { go('food'); setTimeout(() => { activeFilter = 'Unter 10 Min'; renderFood(); }, 260); }
+      if (k === 'eat') { foodTab = 'recipes'; activeFilter = 'Unter 10 Min'; go('food'); }
     });
   });
 
@@ -606,8 +639,104 @@ function questHtml(q) {
   </button>`;
 }
 
+/* ------------------------------------------------------------
+   Rezepte und Tagebuch — Hilfsfunktionen
+------------------------------------------------------------ */
+
+const MEALS = [
+  { id: 'fruehstueck', name: 'Frühstück' },
+  { id: 'mittag',      name: 'Mittagessen' },
+  { id: 'abend',       name: 'Abendessen' },
+  { id: 'snack',       name: 'Snacks' }
+];
+
+function allRecipes() {
+  return DATA.recipes.concat(S.myRecipes || []);
+}
+
+function recipeById(id) {
+  return allRecipes().find((r) => r.id === id);
+}
+
+/* Nährwerte und Score eines Rezepts — pro 100 g und pro Portion. */
+function recipeInfo(r) {
+  if (!r || !r.items || !r.items.length) return null;
+  const n = recipeNutrition(r.items);
+  if (!n) return null;
+  const portions = Math.max(1, Number(r.portions) || 1);
+  const score = nutriScore(n.per100, n.category);
+  const per = {};
+  ['kcal', 'p', 'ch', 'z', 'f', 'sf', 'b', 's'].forEach((k) => {
+    per[k] = n.total[k] / portions;
+  });
+  per.g = n.total.g / portions;
+  return { per100: n.per100, perPortion: per, portions, score, category: n.category };
+}
+
+function todayEntries() {
+  return (S.diary && S.diary[S.todayKey]) || [];
+}
+
+function dayTotals(key) {
+  const list = (S.diary && S.diary[key || S.todayKey]) || [];
+  return list.reduce((a, e) => ({
+    kcal: a.kcal + (e.kcal || 0),
+    p: a.p + (e.p || 0),
+    ch: a.ch + (e.ch || 0),
+    f: a.f + (e.f || 0)
+  }), { kcal: 0, p: 0, ch: 0, f: 0 });
+}
+
+function addDiaryEntry(entry) {
+  const key = S.todayKey || dayKey();
+  if (!S.diary) S.diary = {};
+  if (!S.diary[key]) S.diary[key] = [];
+  S.diary[key].push({ ...entry, eid: 'e' + Date.now() + Math.floor(Math.random() * 1000) });
+
+  // Alles älter als 120 Tage wegräumen, damit der Datensatz nicht endlos wächst
+  const keys = Object.keys(S.diary).sort();
+  while (keys.length > 120) delete S.diary[keys.shift()];
+
+  save();
+}
+
+function removeDiaryEntry(eid) {
+  const key = S.todayKey;
+  if (!S.diary || !S.diary[key]) return;
+  S.diary[key] = S.diary[key].filter((e) => e.eid !== eid);
+  save();
+}
+
+/* Ins Tagebuch eintragen, direkt aus einem Rezept heraus. */
+function logRecipe(r, meal, factor = 1) {
+  const info = recipeInfo(r);
+  if (!info) { toast('Für dieses Rezept fehlen Nährwerte'); return false; }
+  addDiaryEntry({
+    name: r.name,
+    recipeId: r.id,
+    meal,
+    portions: factor,
+    kcal: Math.round(info.perPortion.kcal * factor),
+    p: Math.round(info.perPortion.p * factor),
+    ch: Math.round(info.perPortion.ch * factor),
+    f: Math.round(info.perPortion.f * factor)
+  });
+  return true;
+}
+
+function scoreBadge(grade, big) {
+  if (!grade) return '';
+  return `<span class="ns ns-${grade}${big ? ' ns-lg' : ''}">${grade}</span>`;
+}
+
+function scoreScale(grade) {
+  return `<div class="ns-scale">${['A', 'B', 'C', 'D', 'E']
+    .map((g) => `<span class="ns-${g}${g === grade ? ' on' : ''}">${g}</span>`).join('')}</div>`;
+}
+
 /* ---------- ESSEN ---------- */
 
+let foodTab = 'diary';   // diary | recipes
 let activeFilter = 'Alle';
 
 function matchesFilter(r, f) {
@@ -621,101 +750,677 @@ function matchesFilter(r, f) {
 }
 
 function renderFood() {
-  const list = DATA.recipes.filter((r) => matchesFilter(r, activeFilter));
-
   view.innerHTML = `
     <div class="section">
       <h1 class="screen-title">Essen</h1>
-      <p class="screen-sub">Alles unter 30 Minuten. Kein Kalorienzählen.</p>
+      <p class="screen-sub">${foodTab === 'diary'
+        ? 'Was heute gegessen wurde.'
+        : 'Alles unter 30 Minuten, bewertet nach Nutri-Score.'}</p>
     </div>
+    <div class="section">
+      <div class="seg">
+        <button data-food="diary"   class="${foodTab === 'diary' ? 'on' : ''}">Tagebuch</button>
+        <button data-food="recipes" class="${foodTab === 'recipes' ? 'on' : ''}">Rezepte</button>
+      </div>
+    </div>
+    <div id="foodBody"></div>
+  `;
+
+  view.querySelectorAll('[data-food]').forEach((b) => b.addEventListener('click', () => {
+    foodTab = b.dataset.food; haptic(6); renderFood();
+  }));
+
+  if (foodTab === 'diary') renderDiary();
+  else renderRecipeList();
+}
+
+/* ---------- Tagebuch ---------- */
+
+function renderDiary() {
+  const body = document.getElementById('foodBody');
+  const t = dayTotals();
+  const goal = macroTargets(S.profile);
+  const entries = todayEntries();
+
+  const pct = (v, g) => g ? Math.min(100, Math.round(v / g * 100)) : 0;
+
+  body.innerHTML = `
+    <div class="section" style="margin-top:18px">
+      <div class="card">
+        ${goal ? `
+          <div class="kcal-head">
+            <span class="kcal-big">${Math.round(t.kcal)}</span>
+            <span class="kcal-of">von ${goal.kcal} kcal</span>
+          </div>
+          <div class="bar bar-k ${t.kcal > goal.kcal * 1.05 ? 'over' : ''}" style="margin-top:10px">
+            <i style="width:${pct(t.kcal, goal.kcal)}%"></i>
+          </div>
+          <div class="tiny faint" style="margin-top:7px">
+            ${t.kcal <= goal.kcal
+              ? `Noch ${Math.round(goal.kcal - t.kcal)} kcal übrig`
+              : `${Math.round(t.kcal - goal.kcal)} kcal über dem Ziel — ein Tag entscheidet nichts`}
+          </div>
+          <div class="macro-row">
+            ${macroBar('Eiweiß', t.p, goal.protein, 'p')}
+            ${macroBar('Kohlenh.', t.ch, goal.carbs, 'c')}
+            ${macroBar('Fett', t.f, goal.fat, 'f')}
+          </div>
+        ` : `
+          <div class="kcal-head">
+            <span class="kcal-big">${Math.round(t.kcal)}</span>
+            <span class="kcal-of">kcal heute</span>
+          </div>
+          <div class="tiny muted" style="margin-top:10px">
+            Für ein Tagesziel fehlen deine Körperdaten.
+          </div>
+          <button class="btn btn-primary btn-block" id="toBody" style="margin-top:12px">Körperdaten eintragen</button>
+        `}
+      </div>
+    </div>
+
+    ${MEALS.map((m) => {
+      const list = entries.filter((e) => e.meal === m.id);
+      const kcal = list.reduce((a, e) => a + (e.kcal || 0), 0);
+      return `
+        <div class="section" style="margin-top:0">
+          <div class="meal-head">
+            <span class="grow">
+              <span class="meal-name">${m.name}</span>
+              ${kcal ? `<span class="meal-kcal"> · ${Math.round(kcal)} kcal</span>` : ''}
+            </span>
+            <button class="meal-add" data-add="${m.id}" aria-label="Hinzufügen">${icon('plus')}</button>
+          </div>
+          ${list.length ? list.map(entryHtml).join('')
+            : `<div class="empty-meal">Noch nichts eingetragen</div>`}
+        </div>`;
+    }).join('')}
+
+    <div class="section">
+      <div class="note">
+        <b>Ein Tag sagt wenig.</b><br>
+        Aussagekräftig wird es über eine Woche. Wenn du einen Tag vergisst,
+        ist das kein Datenverlust, sondern ein normaler Tag.
+      </div>
+    </div>
+  `;
+
+  const toBody = document.getElementById('toBody');
+  if (toBody) toBody.addEventListener('click', () => { go('profile'); setTimeout(openBodySheet, 260); });
+
+  body.querySelectorAll('[data-add]').forEach((b) =>
+    b.addEventListener('click', () => openAddSheet(b.dataset.add)));
+
+  body.querySelectorAll('[data-del]').forEach((b) =>
+    b.addEventListener('click', () => {
+      removeDiaryEntry(b.dataset.del); haptic(8); renderDiary();
+    }));
+}
+
+function macroBar(name, value, goal, cls) {
+  const pct = goal ? Math.min(100, Math.round(value / goal * 100)) : 0;
+  return `<div class="macro">
+    <div class="macro-top">
+      <span class="macro-name">${name}</span>
+      <span class="macro-val">${Math.round(value)}/${goal} g</span>
+    </div>
+    <div class="bar bar-${cls}"><i style="width:${pct}%"></i></div>
+  </div>`;
+}
+
+function entryHtml(e) {
+  return `<div class="entry">
+    <span class="grow">
+      <div class="entry-name">${escapeHtml(e.name)}</div>
+      <div class="entry-sub">${e.p ? `${Math.round(e.p)} g Eiweiß · ` : ''}${
+        e.portions && e.portions !== 1 ? e.portions + ' Portionen' : ''}</div>
+    </span>
+    <span class="entry-kcal">${Math.round(e.kcal)} kcal</span>
+    <button class="entry-del" data-del="${e.eid}" aria-label="Entfernen">${icon('close')}</button>
+  </div>`;
+}
+
+/* ---------- Rezeptliste ---------- */
+
+function renderRecipeList() {
+  const body = document.getElementById('foodBody');
+  const mine = S.myRecipes || [];
+  const list = DATA.recipes.filter((r) => matchesFilter(r, activeFilter))
+    .sort((a, b) => a.minutes - b.minutes);
+
+  body.innerHTML = `
+    <div class="section" style="margin-top:16px">
+      <button class="btn btn-primary btn-block" id="newRecipe">${icon('plus')} Eigenes Rezept anlegen</button>
+    </div>
+
+    ${mine.length ? `
+      <div class="section">
+        <div class="section-head"><h3 class="section-title">Meine Rezepte</h3></div>
+        <div class="stack">${mine.map(recipeHtml).join('')}</div>
+      </div>` : ''}
 
     <div class="section">
       <div class="filters">
-        ${DATA.recipeFilters.map((f) => `<button class="filter ${f === activeFilter ? 'active' : ''}" data-f="${f}">${f}</button>`).join('')}
+        ${DATA.recipeFilters.map((f) =>
+          `<button class="filter ${f === activeFilter ? 'active' : ''}" data-f="${f}">${f}</button>`).join('')}
       </div>
     </div>
 
-    <div class="section" style="margin-top:14px">
-      <div class="section-head">
-        <h3 class="section-title">${list.length} Rezept${list.length === 1 ? '' : 'e'}</h3>
-        <span class="tiny faint">sortiert nach Aufwand</span>
-      </div>
+    <div class="section" style="margin-top:12px">
       <div class="stack">
-        ${list.sort((a, b) => a.minutes - b.minutes).map(recipeHtml).join('') || '<div class="card muted small">Nichts gefunden — anderen Filter probieren.</div>'}
+        ${list.map(recipeHtml).join('') || '<div class="card muted small">Nichts gefunden — anderen Filter probieren.</div>'}
       </div>
     </div>
 
     <div class="section">
       <div class="note">
-        <b>Der Trick heißt Rotation, nicht Vielfalt.</b><br>
-        Fünf bis sieben Gerichte, die du im Schlaf kannst, schlagen jede Rezeptsammlung.
-        Jede neue Entscheidung ist ein Punkt, an dem der Plan kippen kann.
+        <b>Was der Nutri-Score kann und was nicht.</b><br>
+        Er bewertet 100 g nach Energie, Zucker, gesättigten Fetten und Salz gegen
+        Gemüse, Ballaststoffe und Eiweiß. Gedacht ist er zum Vergleichen ähnlicher
+        Gerichte, nicht als Urteil. Ein Olivenöl-Dressing bekommt ein D und ist
+        trotzdem nicht ungesund.
       </div>
     </div>
   `;
 
-  view.querySelectorAll('.filter').forEach((b) => b.addEventListener('click', () => {
-    activeFilter = b.dataset.f; haptic(6); renderFood();
+  document.getElementById('newRecipe').addEventListener('click', () => openRecipeEditor());
+
+  body.querySelectorAll('.filter').forEach((b) => b.addEventListener('click', () => {
+    activeFilter = b.dataset.f; haptic(6); renderRecipeList();
   }));
 
-  view.querySelectorAll('.recipe').forEach((b) => b.addEventListener('click', () => {
-    openRecipe(DATA.recipes.find((r) => r.id === b.dataset.id));
+  body.querySelectorAll('.recipe').forEach((b) => b.addEventListener('click', () => {
+    openRecipe(recipeById(b.dataset.id));
   }));
 }
 
 function recipeHtml(r) {
+  const info = recipeInfo(r);
+  const kcal = info ? Math.round(info.perPortion.kcal) : r.kcal;
+  const prot = info ? Math.round(info.perPortion.p) : r.protein;
   return `<button class="item recipe" data-id="${r.id}">
-    <span class="item-ico i-food">${icon(r.icon)}</span>
+    <span class="item-ico i-food">${icon(r.icon || 'bowl')}</span>
     <span class="grow">
-      <div class="item-title">${r.name}</div>
-      <div class="item-meta">${r.hook}</div>
+      <div class="item-title">${escapeHtml(r.name)}</div>
+      <div class="item-meta">${escapeHtml(r.hook || '')}</div>
       <div class="tags">
         <span class="tag">${icon('clock')}${r.minutes} Min</span>
-        <span class="tag tag-hero">${r.protein} g Protein</span>
-        <span class="tag">${r.dishes === 0 ? 'kein Abwasch' : r.dishes + '× Abwasch'}</span>
+        <span class="tag">${kcal} kcal</span>
+        <span class="tag tag-hero">${prot} g Eiweiß</span>
       </div>
     </span>
+    ${info && info.score ? scoreBadge(info.score.grade) : ''}
   </button>`;
 }
 
 function openRecipe(r) {
+  if (!r) return;
   S.recipesViewed++; save(); checkBadges();
 
+  const info = recipeInfo(r);
+  const own = (S.myRecipes || []).some((x) => x.id === r.id);
+  const p = info ? info.perPortion : null;
+
   openSheet(`
-    <div class="sheet-ico">${icon(r.icon)}</div>
-    <h2 class="sheet-title">${r.name}</h2>
-    <p class="muted small" style="margin:0 0 12px">${r.hook}</p>
+    <div class="sheet-ico">${icon(r.icon || 'bowl')}</div>
+    <h2 class="sheet-title">${escapeHtml(r.name)}</h2>
+    <p class="muted small" style="margin:0 0 14px">${escapeHtml(r.hook || '')}</p>
 
-    <div class="stat-grid" style="margin-bottom:16px">
-      <div class="stat"><div class="stat-num">${r.minutes}</div><div class="stat-cap">MINUTEN</div></div>
-      <div class="stat"><div class="stat-num">${r.protein}g</div><div class="stat-cap">PROTEIN</div></div>
-      <div class="stat"><div class="stat-num">${r.dishes}</div><div class="stat-cap">ABWASCH</div></div>
-    </div>
+    ${info && info.score ? `
+      <div class="card" style="margin-bottom:14px">
+        <div class="row" style="margin-bottom:10px">
+          ${scoreBadge(info.score.grade, true)}
+          <span class="grow">
+            <div style="font-weight:600">Nutri-Score ${info.score.grade}</div>
+            <div class="tiny faint">${GRADE_LABEL[info.score.grade]} · bezogen auf 100 g</div>
+          </span>
+        </div>
+        ${scoreScale(info.score.grade)}
+        <div class="tiny faint" style="margin-top:12px">
+          ${nutriTips(info.per100, info.score)[0]}
+        </div>
+        <button class="btn btn-sm btn-ghost" id="scoreWhy" style="margin-top:6px;padding-left:0">Wie kommt das zustande?</button>
+      </div>` : ''}
 
-    <div class="note" style="margin-bottom:18px">${r.why}</div>
+    ${p ? `
+      <div class="stat-grid" style="margin-bottom:10px">
+        <div class="stat"><div class="stat-num">${Math.round(p.kcal)}</div><div class="stat-cap">KCAL</div></div>
+        <div class="stat"><div class="stat-num">${Math.round(p.p)}g</div><div class="stat-cap">EIWEISS</div></div>
+        <div class="stat"><div class="stat-num">${Math.round(p.ch)}g</div><div class="stat-cap">KOHLENH.</div></div>
+      </div>
+      <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat"><div class="stat-num">${Math.round(p.f)}g</div><div class="stat-cap">FETT</div></div>
+        <div class="stat"><div class="stat-num">${Math.round(p.b)}g</div><div class="stat-cap">BALLASTST.</div></div>
+        <div class="stat"><div class="stat-num">${p.s.toFixed(1)}g</div><div class="stat-cap">SALZ</div></div>
+      </div>
+      <div class="tiny faint center" style="margin:-8px 0 16px">
+        je Portion · ${info.portions} ${info.portions === 1 ? 'Portion' : 'Portionen'} gesamt
+      </div>` : `
+      <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat"><div class="stat-num">${r.minutes}</div><div class="stat-cap">MINUTEN</div></div>
+        <div class="stat"><div class="stat-num">${r.protein || '–'}g</div><div class="stat-cap">EIWEISS</div></div>
+        <div class="stat"><div class="stat-num">${r.dishes != null ? r.dishes : '–'}</div><div class="stat-cap">ABWASCH</div></div>
+      </div>`}
+
+    ${r.why ? `<div class="note" style="margin-bottom:18px">${escapeHtml(r.why)}</div>` : ''}
 
     <div class="section-head"><h3 class="section-title">Zutaten</h3></div>
     <div style="margin-bottom:16px">
-      ${r.ingredients.map((i) => `<div class="ing"><span class="ing-dot"></span><span>${i}</span></div>`).join('')}
+      ${(r.items || []).map((i) => `<div class="ing"><span class="ing-dot"></span><span>${
+        escapeHtml(i.label || ((FOOD_BY_ID[i.id] || {}).n + ' · ' + i.g + ' g'))
+      }</span></div>`).join('') || '<div class="tiny faint">Keine Zutaten hinterlegt</div>'}
     </div>
 
-    <div class="section-head"><h3 class="section-title">So geht's</h3></div>
-    <div style="margin-bottom:16px">
-      ${r.steps.map((s, i) => `<div class="step"><span class="step-n">${i + 1}</span><span>${s}</span></div>`).join('')}
-    </div>
+    ${(r.steps || []).length ? `
+      <div class="section-head"><h3 class="section-title">So geht's</h3></div>
+      <div style="margin-bottom:16px">
+        ${r.steps.map((s, i) => `<div class="step"><span class="step-n">${i + 1}</span><span>${escapeHtml(s)}</span></div>`).join('')}
+      </div>` : ''}
 
-    <div class="card small muted" style="margin-bottom:18px">
-      <b style="color:var(--text)">Wenn's heute nicht geht:</b><br>${r.swap}
-    </div>
+    ${r.swap ? `<div class="card small muted" style="margin-bottom:18px">
+      <b style="color:var(--text)">Wenn's heute nicht geht:</b><br>${escapeHtml(r.swap)}
+    </div>` : ''}
 
-    <button class="btn btn-primary btn-block" id="cookedBtn">Gekocht · 30 XP</button>
-    <div class="tiny faint center" style="margin-top:10px">Zählt auch, wenn du abgekürzt hast.</div>
+    <button class="btn btn-primary btn-block" id="logBtn">Ins Tagebuch eintragen</button>
+    <button class="btn btn-block" id="cookedBtn" style="margin-top:8px">Gekocht · 30 XP</button>
+    ${own ? `
+      <button class="btn btn-ghost btn-block" id="editBtn" style="margin-top:8px">Bearbeiten</button>
+      <button class="btn btn-ghost btn-block" id="delBtn" style="margin-top:2px;color:var(--text-faint)">Rezept löschen</button>`
+    : `<button class="btn btn-ghost btn-block" id="copyBtn" style="margin-top:8px">Als eigenes Rezept kopieren</button>`}
+    <div class="tiny faint center" style="margin-top:10px">Gekocht zählt auch, wenn du abgekürzt hast.</div>
   `);
+
+  const why = document.getElementById('scoreWhy');
+  if (why) why.addEventListener('click', () => openScoreDetail(r, info));
 
   document.getElementById('cookedBtn').addEventListener('click', () => {
     S.cooked++;
     addXP(30, 'Gekocht: ' + r.name);
     closeSheet();
+  });
+
+  document.getElementById('logBtn').addEventListener('click', () => openPortionSheet(r));
+
+  const edit = document.getElementById('editBtn');
+  if (edit) edit.addEventListener('click', () => openRecipeEditor(r));
+
+  const del = document.getElementById('delBtn');
+  if (del) del.addEventListener('click', () => {
+    if (!confirm('Rezept wirklich löschen?')) return;
+    S.myRecipes = S.myRecipes.filter((x) => x.id !== r.id);
+    save(); closeSheet(); renderFood(); toast('Gelöscht');
+  });
+
+  const copy = document.getElementById('copyBtn');
+  if (copy) copy.addEventListener('click', () => {
+    closeSheet();
+    setTimeout(() => openRecipeEditor({ ...r, id: null, name: r.name + ' (meine Version)' }), 300);
+  });
+}
+
+/* Aufschlüsselung des Scores — damit die Note nachvollziehbar ist
+   und nicht wie ein Orakel wirkt. */
+function openScoreDetail(r, info) {
+  const d = info.score.detail;
+  const n = info.per100;
+  const row = (label, value, points, negative) => `
+    <div class="ing">
+      <span class="grow">
+        <div style="font-size:14.5px">${label}</div>
+        <div class="tiny faint">${value}</div>
+      </span>
+      <span class="xp-tag" style="color:${negative ? 'var(--move)' : 'var(--food)'}">
+        ${negative ? '+' : '−'}${points}
+      </span>
+    </div>`;
+
+  openSheet(`
+    <div class="sheet-ico">${scoreBadge(info.score.grade, true)}</div>
+    <h2 class="sheet-title">So kommt ${info.score.grade} zustande</h2>
+    <p class="muted small" style="margin:0 0 16px">
+      Alles bezogen auf 100 g. Ungünstige Punkte zählen hoch, günstige ziehen ab.
+      Ergebnis: ${info.score.N} − ${info.score.P} = ${info.score.score} Punkte.
+    </p>
+
+    <div class="section-head"><h3 class="section-title">Zählt gegen den Score</h3></div>
+    <div style="margin-bottom:16px">
+      ${row('Energie', Math.round(n.kcal) + ' kcal', d.energie, true)}
+      ${row('Zucker', n.z.toFixed(1) + ' g', d.zucker, true)}
+      ${row('Gesättigte Fette', n.sf.toFixed(1) + ' g', d.gesFett, true)}
+      ${row('Salz', n.s.toFixed(2) + ' g', d.salz, true)}
+    </div>
+
+    <div class="section-head"><h3 class="section-title">Zählt dafür</h3></div>
+    <div style="margin-bottom:16px">
+      ${row('Obst, Gemüse, Hülsenfrüchte, Nüsse', Math.round(n.fvl) + ' %', d.obstGemuese, false)}
+      ${row('Ballaststoffe', n.b.toFixed(1) + ' g', d.ballaststoffe, false)}
+      ${row('Eiweiß' + (d.eiweissGezaehlt ? '' : ' (zählt hier nicht)'),
+            n.p.toFixed(1) + ' g', d.eiweissGezaehlt ? d.eiweiss : 0, false)}
+    </div>
+
+    <div class="section-head"><h3 class="section-title">Was helfen würde</h3></div>
+    <div style="margin-bottom:16px">
+      ${nutriTips(n, info.score).map((t) => `<div class="ing"><span class="ing-dot"></span><span>${t}</span></div>`).join('')}
+    </div>
+
+    <div class="note">
+      Der Nutri-Score ist für verpackte Lebensmittel entwickelt und vergleicht
+      innerhalb einer Produktgruppe. Bei einem selbst gekochten Gericht ist er
+      eine Orientierung, kein Urteil über deine Ernährung.
+    </div>
+  `);
+}
+
+/* Portion und Mahlzeit wählen, bevor es ins Tagebuch geht. */
+function openPortionSheet(r) {
+  const info = recipeInfo(r);
+  if (!info) { toast('Für dieses Rezept fehlen Nährwerte'); return; }
+
+  openSheet(`
+    <h2 class="sheet-title">Ins Tagebuch</h2>
+    <p class="muted small" style="margin:0 0 16px">${escapeHtml(r.name)} · ${Math.round(info.perPortion.kcal)} kcal je Portion</p>
+
+    <div class="field">
+      <label>Wie viele Portionen?</label>
+      <div class="seg" id="portionSeg">
+        ${['0.5', '1', '1.5', '2'].map((v) =>
+          `<button data-portion="${v}" class="${v === '1' ? 'on' : ''}">${v.replace('.', ',')}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Zu welcher Mahlzeit?</label>
+      <div class="stack">
+        ${MEALS.map((m) => `<button class="item" data-meal="${m.id}">
+          <span class="grow"><div class="item-title">${m.name}</div></span>
+          ${icon('chevron')}
+        </button>`).join('')}
+      </div>
+    </div>
+  `);
+
+  let factor = 1;
+  sheetBody.querySelectorAll('[data-portion]').forEach((b) => b.addEventListener('click', () => {
+    factor = parseFloat(b.dataset.portion);
+    sheetBody.querySelectorAll('[data-portion]').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+
+  sheetBody.querySelectorAll('[data-meal]').forEach((b) => b.addEventListener('click', () => {
+    if (logRecipe(r, b.dataset.meal, factor)) {
+      haptic(12);
+      toast(`${Math.round(info.perPortion.kcal * factor)} kcal eingetragen`, 'check');
+      closeSheet();
+      foodTab = 'diary';
+      if (currentTab === 'food') renderFood(); else go('food');
+    }
+  }));
+}
+
+/* Etwas zu einer Mahlzeit hinzufügen: Rezept, einzelne Zutat
+   oder — für auswärts — einfach eine Zahl. */
+function openAddSheet(mealId) {
+  const meal = MEALS.find((m) => m.id === mealId);
+
+  openSheet(`
+    <h2 class="sheet-title">${meal.name}</h2>
+    <p class="muted small" style="margin:0 0 14px">Rezept oder Zutat suchen — oder unten einfach Kalorien eintragen.</p>
+
+    <div class="field search-wrap">
+      <input id="addSearch" type="search" placeholder="Suchen…" autocomplete="off">
+      <div class="search-results" id="addResults"></div>
+    </div>
+
+    <div class="section-head" style="margin-top:20px"><h3 class="section-title">Ohne Suche eintragen</h3></div>
+    <div class="field-row">
+      <div class="field"><label>Was war es?</label><input id="qName" placeholder="Mittagessen auswärts"></div>
+      <div class="field"><label>Kalorien</label><input id="qKcal" type="number" inputmode="numeric" placeholder="600"></div>
+    </div>
+    <button class="btn btn-block" id="qAdd">Eintragen</button>
+    <div class="tiny faint center" style="margin-top:10px">
+      Grob geschätzt ist besser als gar nicht erfasst.
+    </div>
+  `);
+
+  const input = document.getElementById('addSearch');
+  const results = document.getElementById('addResults');
+
+  const paint = () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { results.innerHTML = ''; return; }
+
+    const recipes = allRecipes()
+      .filter((r) => r.name.toLowerCase().includes(q))
+      .slice(0, 5);
+    const foods = findFoods(q, 8);
+
+    results.innerHTML =
+      recipes.map((r) => {
+        const info = recipeInfo(r);
+        return `<button class="sr" data-recipe="${r.id}">
+          <span class="grow"><div class="sr-name">${escapeHtml(r.name)}</div>
+          <div class="sr-cat">Rezept · je Portion</div></span>
+          <span class="sr-kcal">${info ? Math.round(info.perPortion.kcal) : '?'} kcal</span>
+        </button>`;
+      }).join('') +
+      foods.map((f) => `<button class="sr" data-food-id="${f.id}">
+        <span class="grow"><div class="sr-name">${f.n}</div><div class="sr-cat">${f.c} · pro 100 g</div></span>
+        <span class="sr-kcal">${f.kcal} kcal</span>
+      </button>`).join('');
+
+    results.querySelectorAll('[data-recipe]').forEach((b) => b.addEventListener('click', () => {
+      const r = recipeById(b.dataset.recipe);
+      if (logRecipe(r, mealId, 1)) {
+        haptic(12); toast('Eingetragen', 'check'); closeSheet(); renderFood();
+      }
+    }));
+
+    results.querySelectorAll('[data-food-id]').forEach((b) => b.addEventListener('click', () => {
+      openGramSheet(FOOD_BY_ID[b.dataset.foodId], mealId);
+    }));
+  };
+
+  input.addEventListener('input', paint);
+  setTimeout(() => input.focus(), 300);
+
+  document.getElementById('qAdd').addEventListener('click', () => {
+    const name = document.getElementById('qName').value.trim() || meal.name;
+    const kcal = Math.round(Number(document.getElementById('qKcal').value) || 0);
+    if (kcal <= 0) { toast('Bitte Kalorien eintragen'); return; }
+    addDiaryEntry({ name, meal: mealId, kcal, p: 0, ch: 0, f: 0, portions: 1 });
+    haptic(12); toast(kcal + ' kcal eingetragen', 'check');
+    closeSheet(); renderFood();
+  });
+}
+
+/* Gramm für eine einzelne Zutat */
+function openGramSheet(food, mealId) {
+  openSheet(`
+    <h2 class="sheet-title">${food.n}</h2>
+    <p class="muted small" style="margin:0 0 16px">${food.kcal} kcal, ${food.p} g Eiweiß pro 100 g</p>
+    <div class="field">
+      <label>Menge in Gramm</label>
+      <input id="gramInput" type="number" inputmode="numeric" value="100">
+    </div>
+    <div class="card" id="gramPreview" style="margin-bottom:14px"></div>
+    <button class="btn btn-primary btn-block" id="gramAdd">Eintragen</button>
+  `);
+
+  const input = document.getElementById('gramInput');
+  const preview = document.getElementById('gramPreview');
+
+  const calc = () => {
+    const g = Number(input.value) || 0;
+    const k = g / 100;
+    return { g, kcal: food.kcal * k, p: food.p * k, ch: food.ch * k, f: food.f * k };
+  };
+  const paint = () => {
+    const v = calc();
+    preview.innerHTML = `<div class="kcal-head">
+      <span class="kcal-big">${Math.round(v.kcal)}</span><span class="kcal-of">kcal</span></div>
+      <div class="tiny faint" style="margin-top:6px">
+        ${Math.round(v.p)} g Eiweiß · ${Math.round(v.ch)} g Kohlenhydrate · ${Math.round(v.f)} g Fett
+      </div>`;
+  };
+  paint();
+  input.addEventListener('input', paint);
+
+  document.getElementById('gramAdd').addEventListener('click', () => {
+    const v = calc();
+    if (v.g <= 0) return;
+    addDiaryEntry({
+      name: `${food.n}, ${Math.round(v.g)} g`, meal: mealId, portions: 1,
+      kcal: Math.round(v.kcal), p: Math.round(v.p), ch: Math.round(v.ch), f: Math.round(v.f)
+    });
+    haptic(12); toast('Eingetragen', 'check'); closeSheet(); renderFood();
+  });
+}
+
+/* ------------------------------------------------------------
+   Rezept-Editor
+   Zutat suchen, Gramm eintragen, Score aktualisiert sich sofort.
+   Das direkte Feedback ist der Punkt: Man sieht beim Bauen, was
+   eine Zutat mit dem Gericht macht.
+------------------------------------------------------------ */
+
+function openRecipeEditor(existing) {
+  const draft = existing
+    ? JSON.parse(JSON.stringify({ ...existing, steps: existing.steps || [] }))
+    : { id: null, name: '', hook: '', minutes: 15, portions: 2, items: [], steps: [], icon: 'bowl' };
+
+  openSheet(`
+    <h2 class="sheet-title">${existing && existing.id ? 'Rezept bearbeiten' : 'Neues Rezept'}</h2>
+    <p class="muted small" style="margin:0 0 16px">
+      Zutaten in Gramm — Nährwerte und Nutri-Score rechnen sich mit.
+    </p>
+
+    <div class="field"><label>Name</label>
+      <input id="rName" value="${escapeHtml(draft.name)}" placeholder="Linsendal mit Spinat"></div>
+
+    <div class="field"><label>Kurzbeschreibung</label>
+      <input id="rHook" value="${escapeHtml(draft.hook || '')}" placeholder="Ein Topf, hält ewig satt"></div>
+
+    <div class="field-row">
+      <div class="field"><label>Portionen</label>
+        <input id="rPortions" type="number" inputmode="numeric" value="${draft.portions}"></div>
+      <div class="field"><label>Minuten</label>
+        <input id="rMinutes" type="number" inputmode="numeric" value="${draft.minutes}"></div>
+    </div>
+
+    <div class="section-head" style="margin-top:18px"><h3 class="section-title">Zutaten</h3></div>
+    <div class="field search-wrap">
+      <input id="rSearch" type="search" placeholder="Zutat suchen…" autocomplete="off">
+      <div class="search-results" id="rResults"></div>
+    </div>
+    <div id="rItems" style="margin-bottom:16px"></div>
+
+    <div class="card" id="rPreview" style="margin-bottom:16px"></div>
+
+    <div class="field"><label>Zubereitung — ein Schritt pro Zeile</label>
+      <textarea id="rSteps" placeholder="Zwiebeln anschwitzen&#10;Linsen und Brühe dazu&#10;15 Minuten köcheln">${escapeHtml((draft.steps || []).join('\n'))}</textarea></div>
+
+    <button class="btn btn-primary btn-block" id="rSave">Speichern</button>
+    <div class="tiny faint center" style="margin-top:10px">
+      Zutat nicht dabei? Nimm die ähnlichste — für die Einordnung reicht das.
+    </div>
+  `);
+
+  const itemsEl = document.getElementById('rItems');
+  const previewEl = document.getElementById('rPreview');
+  const search = document.getElementById('rSearch');
+  const results = document.getElementById('rResults');
+
+  const paintItems = () => {
+    itemsEl.innerHTML = draft.items.length ? draft.items.map((it, i) => {
+      const f = FOOD_BY_ID[it.id];
+      return `<div class="ing-row">
+        <span class="grow ing-name">${f ? f.n : it.id}</span>
+        <input class="ing-g" type="number" inputmode="numeric" value="${it.g}" data-i="${i}">
+        <span class="tiny faint">g</span>
+        <button class="ing-del" data-del-i="${i}" aria-label="Entfernen">${icon('close')}</button>
+      </div>`;
+    }).join('') : '<div class="tiny faint" style="padding:8px 0">Noch keine Zutaten</div>';
+
+    itemsEl.querySelectorAll('[data-i]').forEach((inp) => inp.addEventListener('input', () => {
+      draft.items[Number(inp.dataset.i)].g = Number(inp.value) || 0;
+      paintPreview();
+    }));
+    itemsEl.querySelectorAll('[data-del-i]').forEach((b) => b.addEventListener('click', () => {
+      draft.items.splice(Number(b.dataset.delI), 1);
+      paintItems(); paintPreview();
+    }));
+  };
+
+  const paintPreview = () => {
+    draft.portions = Math.max(1, Number(document.getElementById('rPortions').value) || 1);
+    const info = recipeInfo(draft);
+    if (!info) {
+      previewEl.innerHTML = '<div class="tiny faint">Zutaten hinzufügen, dann erscheinen hier Nährwerte und Score.</div>';
+      return;
+    }
+    const p = info.perPortion;
+    previewEl.innerHTML = `
+      <div class="row" style="margin-bottom:12px">
+        ${scoreBadge(info.score.grade, true)}
+        <span class="grow">
+          <div style="font-weight:600">Nutri-Score ${info.score.grade}</div>
+          <div class="tiny faint">${GRADE_LABEL[info.score.grade]}</div>
+        </span>
+      </div>
+      ${scoreScale(info.score.grade)}
+      <div class="kcal-head" style="margin-top:14px">
+        <span class="kcal-big">${Math.round(p.kcal)}</span><span class="kcal-of">kcal je Portion</span>
+      </div>
+      <div class="tiny faint" style="margin-top:6px">
+        ${Math.round(p.p)} g Eiweiß · ${Math.round(p.ch)} g Kohlenhydrate ·
+        ${Math.round(p.f)} g Fett · ${Math.round(p.b)} g Ballaststoffe · ${p.s.toFixed(1)} g Salz
+      </div>
+      <div class="tiny faint" style="margin-top:10px">${nutriTips(info.per100, info.score)[0]}</div>`;
+  };
+
+  search.addEventListener('input', () => {
+    const list = findFoods(search.value, 8);
+    results.innerHTML = list.map((f) => `<button class="sr" data-add-food="${f.id}">
+      <span class="grow"><div class="sr-name">${f.n}</div><div class="sr-cat">${f.c}</div></span>
+      <span class="sr-kcal">${f.kcal} kcal</span>
+    </button>`).join('');
+    results.querySelectorAll('[data-add-food]').forEach((b) => b.addEventListener('click', () => {
+      draft.items.push({ id: b.dataset.addFood, g: 100 });
+      search.value = ''; results.innerHTML = '';
+      paintItems(); paintPreview(); haptic(6);
+    }));
+  });
+
+  document.getElementById('rPortions').addEventListener('input', paintPreview);
+  paintItems();
+  paintPreview();
+
+  document.getElementById('rSave').addEventListener('click', () => {
+    const name = document.getElementById('rName').value.trim();
+    if (!name) { toast('Das Rezept braucht einen Namen'); return; }
+    if (!draft.items.length) { toast('Mindestens eine Zutat'); return; }
+
+    const recipe = {
+      id: draft.id || 'my' + Date.now(),
+      icon: 'bowl',
+      name,
+      hook: document.getElementById('rHook').value.trim(),
+      minutes: Math.max(1, Number(document.getElementById('rMinutes').value) || 15),
+      portions: Math.max(1, Number(document.getElementById('rPortions').value) || 1),
+      items: draft.items.filter((i) => i.g > 0),
+      steps: document.getElementById('rSteps').value.split('\n').map((s) => s.trim()).filter(Boolean),
+      tags: ['Eigenes'],
+      own: true
+    };
+
+    if (!S.myRecipes) S.myRecipes = [];
+    const idx = S.myRecipes.findIndex((x) => x.id === recipe.id);
+    if (idx >= 0) S.myRecipes[idx] = recipe; else S.myRecipes.push(recipe);
+    save();
+
+    closeSheet();
+    foodTab = 'recipes';
+    if (currentTab === 'food') renderFood(); else go('food');
+    if (idx < 0) addXP(25, 'Rezept angelegt: ' + name);
+    else toast('Gespeichert', 'check');
   });
 }
 
@@ -1148,6 +1853,10 @@ async function askCoach(text) {
 
 function coachContext() {
   const quests = todayQuests();
+  const adv = deficitAdvice(S.profile);
+  const goal = macroTargets(S.profile);
+  const eaten = dayTotals();
+
   return {
     level: levelInfo(S.xpTotal).level,
     xpTotal: S.xpTotal,
@@ -1159,7 +1868,17 @@ function coachContext() {
     cooked: S.cooked,
     workouts: S.workouts,
     mindful: S.mindful,
-    localTime: new Date().toLocaleString('de-DE', { weekday: 'long', hour: '2-digit', minute: '2-digit' })
+    localTime: new Date().toLocaleString('de-DE', { weekday: 'long', hour: '2-digit', minute: '2-digit' }),
+
+    // Ernährung — nur mitschicken, was tatsächlich hinterlegt ist
+    bmr: adv ? adv.bmr : null,
+    tdee: adv ? adv.tdee : null,
+    bmi: adv ? Number(adv.bmi.toFixed(1)) : null,
+    deficit: S.profile.deficit || 0,
+    targetKcal: goal ? goal.kcal : null,
+    eatenToday: Math.round(eaten.kcal),
+    proteinToday: Math.round(eaten.p),
+    ownRecipes: (S.myRecipes || []).length
   };
 }
 
@@ -1176,6 +1895,169 @@ function localCoachReply(text) {
     base += `\n\nÜbrigens: heute steht noch nichts auf deiner Liste. Ein Glas Wasser wären 5 XP in 30 Sekunden.`;
   }
   return base;
+}
+
+/* ------------------------------------------------------------
+   Körperdaten und Tagesziel
+
+   Bewusst zurückhaltend: Die App rechnet, empfiehlt einen Bereich
+   und begründet ihn — die Entscheidung bleibt bei dir. Nach unten
+   sind harte Grenzen eingebaut, die sich nicht überschreiben lassen.
+------------------------------------------------------------ */
+
+function openBodySheet() {
+  const p = { ...S.profile };
+
+  const render = () => {
+    const adv = deficitAdvice(p);
+    const goal = adv ? macroTargets({ ...p, deficit: p.deficit }) : null;
+
+    sheetBody.innerHTML = `
+      <div class="sheet-ico">${icon('scan')}</div>
+      <h2 class="sheet-title">Dein Körper</h2>
+      <p class="muted small" style="margin:0 0 16px">
+        Daraus ergibt sich dein Tagesbedarf. Die Werte bleiben in deinem Konto.
+      </p>
+
+      <div class="field">
+        <label>Geschlecht — für die Formel</label>
+        <div class="seg" id="sexSeg">
+          <button data-sex="m" class="${p.sex === 'm' ? 'on' : ''}">männlich</button>
+          <button data-sex="w" class="${p.sex === 'w' ? 'on' : ''}">weiblich</button>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>Alter</label>
+          <input id="bAge" type="number" inputmode="numeric" value="${p.age || ''}" placeholder="38"></div>
+        <div class="field"><label>Größe in cm</label>
+          <input id="bHeight" type="number" inputmode="numeric" value="${p.heightCm || ''}" placeholder="180"></div>
+      </div>
+      <div class="field"><label>Gewicht in kg</label>
+        <input id="bWeight" type="number" inputmode="decimal" value="${p.weightKg || ''}" placeholder="82"></div>
+
+      <div class="field">
+        <label>Wie aktiv bist du?</label>
+        <div class="stack">
+          ${ACTIVITY.map((a) => `<button class="item" data-act="${a.id}"
+              style="${p.activity === a.id ? 'border-color:var(--accent)' : ''}">
+            <span class="grow">
+              <div class="item-title">${a.label}</div>
+              <div class="item-meta">${a.desc}</div>
+            </span>
+            ${p.activity === a.id ? `<span class="check" style="background:var(--accent);border-color:var(--accent)">${icon('check')}</span>` : ''}
+          </button>`).join('')}
+        </div>
+      </div>
+
+      ${adv ? `
+        <div class="section-head" style="margin-top:22px"><h3 class="section-title">Dein Bedarf</h3></div>
+        <div class="stat-grid" style="margin-bottom:14px">
+          <div class="stat"><div class="stat-num">${adv.bmr}</div><div class="stat-cap">GRUNDUMSATZ</div></div>
+          <div class="stat"><div class="stat-num">${adv.tdee}</div><div class="stat-cap">GESAMT</div></div>
+          <div class="stat"><div class="stat-num">${adv.bmi.toFixed(1)}</div><div class="stat-cap">BMI</div></div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="slider-head">
+            <span class="macro-name">Tägliches Defizit</span>
+            <span class="slider-val">${p.deficit || 0} kcal</span>
+          </div>
+          <input type="range" id="defSlider" min="0" max="${adv.maxDeficit}" step="25" value="${Math.min(p.deficit || 0, adv.maxDeficit)}">
+          <div class="tiny faint" style="display:flex;justify-content:space-between">
+            <span>Halten</span><span>Maximum ${adv.maxDeficit}</span>
+          </div>
+          <div class="tiny faint" style="margin-top:10px">
+            ${p.deficit > 0
+              ? `Etwa ${adv.weeklyKg(p.deficit).toFixed(2)} kg pro Woche. Tagesziel: <b>${goal.kcal} kcal</b>.`
+              : `Kein Defizit — du isst auf Bedarf. Tagesziel: <b>${goal.kcal} kcal</b>.`}
+          </div>
+        </div>
+
+        <div class="${adv.tone === 'warn' ? 'note-warn' : 'note'}" style="margin-bottom:14px">
+          <b>Empfehlung: ${adv.recommended} kcal</b><br>${adv.note}
+        </div>
+
+        <button class="btn btn-block" id="takeRec" style="margin-bottom:8px">Empfehlung übernehmen</button>
+        <button class="btn btn-ghost btn-block" id="askCoachDef">Coach dazu fragen</button>
+
+        <div class="tiny faint" style="margin-top:16px;line-height:1.5">
+          Die Formel schätzt mit rund zehn Prozent Streuung. Aussagekräftiger als jede
+          Rechnung ist, wie sich dein Gewicht über zwei bis drei Wochen tatsächlich
+          entwickelt — passe dann an. Bei Vorerkrankungen, Medikation oder wenn du
+          unsicher bist, besprich das Ziel mit deiner Ärztin oder deinem Arzt.
+        </div>
+      ` : `<div class="note" style="margin-top:16px">
+          Sobald Alter, Größe und Gewicht eingetragen sind, erscheint hier dein Bedarf.
+        </div>`}
+
+      <button class="btn btn-primary btn-block" id="bSave" style="margin-top:18px">Speichern</button>
+    `;
+    wire();
+  };
+
+  const readFields = () => {
+    p.age = Number(document.getElementById('bAge').value) || null;
+    p.heightCm = Number(document.getElementById('bHeight').value) || null;
+    p.weightKg = Number(document.getElementById('bWeight').value) || null;
+  };
+
+  const wire = () => {
+    sheetBody.querySelectorAll('[data-sex]').forEach((b) => b.addEventListener('click', () => {
+      readFields(); p.sex = b.dataset.sex; render();
+    }));
+    sheetBody.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
+      readFields(); p.activity = b.dataset.act; render();
+    }));
+    ['bAge', 'bHeight', 'bWeight'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => { readFields(); render(); });
+    });
+
+    const slider = document.getElementById('defSlider');
+    if (slider) slider.addEventListener('input', () => {
+      p.deficit = Number(slider.value);
+      sheetBody.querySelector('.slider-val').textContent = p.deficit + ' kcal';
+    });
+    if (slider) slider.addEventListener('change', render);
+
+    const take = document.getElementById('takeRec');
+    if (take) take.addEventListener('click', () => {
+      const adv = deficitAdvice(p);
+      p.deficit = adv.recommended; render(); haptic(10);
+    });
+
+    const ask = document.getElementById('askCoachDef');
+    if (ask) ask.addEventListener('click', () => {
+      const adv = deficitAdvice(p);
+      S.profile = { ...p };
+      save();
+      closeSheet();
+      go('coach');
+      setTimeout(() => {
+        const q = `Mein Grundumsatz liegt bei ${adv.bmr} kcal, mein Gesamtbedarf bei ${adv.tdee} kcal, ` +
+                  `mein BMI bei ${adv.bmi.toFixed(1)}. Welches Defizit ist für mich sinnvoll und warum?`;
+        const input = document.getElementById('input');
+        if (input) { input.value = q; document.getElementById('sendBtn').click(); }
+      }, 400);
+    });
+
+    const saveBtn = document.getElementById('bSave');
+    if (saveBtn) saveBtn.addEventListener('click', () => {
+      readFields();
+      const adv = deficitAdvice(p);
+      if (adv) p.deficit = Math.max(0, Math.min(p.deficit || 0, adv.maxDeficit));
+      S.profile = { ...p };
+      save();
+      closeSheet();
+      toast('Gespeichert', 'check');
+      if (currentTab === 'profile') renderProfile();
+      else if (currentTab === 'home') renderHome();
+    });
+  };
+
+  openSheet('');
+  render();
 }
 
 /* ---------- PROFIL ---------- */
@@ -1233,6 +2115,38 @@ function renderProfile() {
     </div>
 
     <div class="section">
+      <div class="section-head">
+        <h3 class="section-title">Dein Körper</h3>
+        <button class="section-action" id="bodyBtn">${S.profile.weightKg ? 'ändern' : 'eintragen'}</button>
+      </div>
+      ${(() => {
+        const adv = deficitAdvice(S.profile);
+        if (!adv) return `<div class="card"><div class="tiny muted">
+          Größe, Alter und Gewicht eintragen — daraus ergeben sich Tagesbedarf und Ziel.
+        </div>
+        <button class="btn btn-primary btn-block" id="bodyBtn2" style="margin-top:12px">Jetzt eintragen</button></div>`;
+        const goal = macroTargets(S.profile);
+        return `
+          <div class="stat-grid">
+            <div class="stat"><div class="stat-num">${adv.bmr}</div><div class="stat-cap">GRUNDUMSATZ</div></div>
+            <div class="stat"><div class="stat-num">${adv.tdee}</div><div class="stat-cap">BEDARF</div></div>
+            <div class="stat"><div class="stat-num">${goal.kcal}</div><div class="stat-cap">TAGESZIEL</div></div>
+          </div>
+          <div class="card" style="margin-top:9px">
+            <div class="tiny faint">
+              ${S.profile.deficit > 0
+                ? `Defizit ${S.profile.deficit} kcal · etwa ${adv.weeklyKg(S.profile.deficit).toFixed(2)} kg pro Woche`
+                : 'Kein Defizit eingestellt — du isst auf Bedarf.'}
+              · BMI ${adv.bmi.toFixed(1)}
+            </div>
+            <div class="tiny faint" style="margin-top:6px">
+              Eiweiß ${goal.protein} g · Kohlenhydrate ${goal.carbs} g · Fett ${goal.fat} g
+            </div>
+          </div>`;
+      })()}
+    </div>
+
+    <div class="section">
       <div class="section-head"><h3 class="section-title">Konto</h3></div>
       <div class="card">
         ${Cloud.user ? `
@@ -1248,12 +2162,7 @@ function renderProfile() {
           <button class="btn btn-block" id="diagBtn" style="margin-top:12px">Verbindung prüfen</button>
           <button class="btn btn-ghost btn-block" id="logoutBtn" style="margin-top:6px">Abmelden</button>
         ` : `
-          <div class="tiny muted">${CONFIG.READY
-            ? 'Kein Konto verbunden, obwohl die Zwischenablage eingerichtet ist. Das heißt fast ' +
-              'immer: Dein Gerät bedient dich noch aus einem alten Zwischenspeicher. Unten auf ' +
-              '„Zwischenspeicher leeren".'
-            : 'Kein Konto verbunden. Dein Fortschritt liegt nur auf diesem Gerät und geht ' +
-              'verloren, wenn du die Browserdaten löschst.'}</div>
+          <div class="tiny muted">${configHint()}</div>
           <button class="btn btn-block" id="wipeBtn" style="margin-top:12px">Zwischenspeicher leeren</button>
         `}
       </div>
@@ -1297,6 +2206,11 @@ function renderProfile() {
     save(); haptic(8); renderProfile();
   }));
 
+  ['bodyBtn', 'bodyBtn2'].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', openBodySheet);
+  });
+
   const diag = document.getElementById('diagBtn');
   if (diag) diag.addEventListener('click', runDiagnostics);
 
@@ -1320,6 +2234,27 @@ function renderProfile() {
       save(); rollDay(); refreshChrome(); go('home');
     }
   });
+}
+
+/* Sagt genau, warum kein Konto verbunden ist. Vorher stand hier ein
+   allgemeiner Satz — der hat die eigentliche Ursache verdeckt. */
+function configHint() {
+  if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.startsWith('HIER_')) {
+    return 'In <b>config.js</b> steht noch der Platzhalter statt deiner Supabase-Adresse. ' +
+           'Die Datei ist lokal vielleicht schon ausgefüllt — dann fehlt nur das Hochladen.';
+  }
+  if (!CONFIG.SUPABASE_KEY || CONFIG.SUPABASE_KEY.startsWith('HIER_')) {
+    return 'In <b>config.js</b> fehlt noch der Publishable key aus Supabase ' +
+           '(Project Settings → API Keys).';
+  }
+  if (!CONFIG.CLOUD) {
+    return 'In <b>config.js</b> steht <b>CLOUD: false</b>. Auf true setzen, um das Konto zu nutzen.';
+  }
+  if (!window.supabase) {
+    return 'Die Supabase-Bibliothek wurde nicht geladen. Bist du offline?';
+  }
+  return 'Kein Konto verbunden. Dein Fortschritt liegt nur auf diesem Gerät und geht verloren, ' +
+         'wenn du die Browserdaten löschst.';
 }
 
 /* ------------------------------------------------------------
@@ -1661,7 +2596,7 @@ async function boot() {
 
   if (!connected) {
     startApp();
-    if (CONFIG.READY) toast('Ohne Konto gestartet — siehe Profil', 'plus');
+    toast('Ohne Konto gestartet — siehe Profil', 'plus');
     return;
   }
 

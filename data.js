@@ -21,7 +21,15 @@ DATA.recipes = [
     lowExec: true,
     hook: 'Abends 5 Min — morgens null Entscheidungen.',
     why: 'Protein und Ballaststoffe halten den Blutzucker flach. Weniger Zucker-Crash bedeutet weniger Konzentrationsloch am Vormittag.',
-    ingredients: ['80 g Haferflocken', '200 ml Milch oder Sojadrink', '30 g Proteinpulver (Vanille)', '1 EL Chiasamen', '1 Handvoll Beeren', '1 TL Erdnussmus'],
+    portions: 1,
+    items: [
+      { id: 'hafer',      g: 80,  label: '80 g Haferflocken' },
+      { id: 'milch_15',   g: 200, label: '200 ml Milch oder Sojadrink' },
+      { id: 'protein_p',  g: 30,  label: '30 g Proteinpulver (Vanille)' },
+      { id: 'chia',       g: 12,  label: '1 EL Chiasamen' },
+      { id: 'beeren',     g: 80,  label: '1 Handvoll Beeren' },
+      { id: 'erdnussmus', g: 10,  label: '1 TL Erdnussmus' }
+    ],
     steps: ['Alles außer Beeren in ein Glas geben.', 'Umrühren bis es keine trockenen Stellen mehr gibt.', 'Deckel drauf, ab in den Kühlschrank.', 'Morgens Beeren und Erdnussmus obendrauf.'],
     swap: 'Kein Proteinpulver? 150 g Skyr rein.'
   },
@@ -32,7 +40,15 @@ DATA.recipes = [
     lowExec: true,
     hook: 'Eine Pfanne. Fertig. Kein Schneidebrett nötig.',
     why: 'Eier liefern Cholin — Baustein für Acetylcholin, wichtig für Aufmerksamkeit und Gedächtnis.',
-    ingredients: ['1 Dose gehackte Tomaten', '3 Eier', '1 TL Paprikapulver edelsüß', '1/2 TL Kreuzkümmel', 'Feta nach Gefühl', 'Olivenöl, Salz'],
+    portions: 2,
+    items: [
+      { id: 'tomate_d',  g: 400, label: '1 Dose gehackte Tomaten' },
+      { id: 'ei',        g: 180, label: '3 Eier' },
+      { id: 'gewuerz',   g: 5,   label: '1 TL Paprika edelsüß, 1/2 TL Kreuzkümmel' },
+      { id: 'feta',      g: 60,  label: 'Feta nach Gefühl' },
+      { id: 'olivenoel', g: 15,  label: '1 EL Olivenöl' },
+      { id: 'salz',      g: 2,   label: 'Salz' }
+    ],
     steps: ['Öl und Gewürze 30 Sekunden in die Pfanne.', 'Tomaten dazu, 4 Minuten köcheln.', 'Drei Mulden formen, Eier hineingeben.', 'Deckel drauf, 4 Minuten. Feta darüber.'],
     swap: 'Mehr Protein: eine Dose Kichererbsen mit hinein.'
   },
@@ -43,7 +59,17 @@ DATA.recipes = [
     lowExec: false,
     hook: 'Kein Rezept — eine Formel. Nie wieder Entscheidungslähmung.',
     why: 'Feste Formel statt freier Auswahl. Weniger Entscheidungen bedeuten weniger Reibung und mehr Durchhaltevermögen.',
-    ingredients: ['1 Faust Kohlenhydrate (Reis, Quinoa, Süßkartoffel)', '1 Handteller Protein (Hähnchen, Tofu, Lachs, Linsen)', '2 Fäuste Gemüse (roh oder Tiefkühl)', '1 Daumen Fett (Avocado, Nüsse, Olivenöl)', '1 Löffel Sauce (Tahini, Joghurt-Kräuter, Sriracha-Mayo)'],
+    portions: 1,
+    // Beispielbelegung der Formel — die Nährwerte gelten für genau diese
+    // Variante. Tausch die Zutaten, dann rechnet sich alles neu.
+    items: [
+      { id: 'reis_wk',   g: 200, label: '1 Faust Kohlenhydrate — hier gekochter Reis' },
+      { id: 'haehnchen', g: 130, label: '1 Handteller Protein — hier Hähnchenbrust' },
+      { id: 'brokkoli',  g: 150, label: '2 Fäuste Gemüse — hier Brokkoli' },
+      { id: 'avocado',   g: 50,  label: '1 Daumen Fett — hier Avocado' },
+      { id: 'olivenoel', g: 10,  label: 'Olivenöl' },
+      { id: 'tahini',    g: 15,  label: '1 Löffel Sauce — hier Tahini' }
+    ],
     steps: ['Kohlenhydrate kochen — oder Fertigreis nutzen.', 'Protein anbraten, salzen.', 'Gemüse dazu oder roh in die Schüssel.', 'Fett und Sauce darüber. Fertig.'],
     swap: 'Schlechter Tag? Fertigreis, Räuchertofu, Tiefkühlerbsen. Zählt genauso.'
   },
@@ -54,7 +80,14 @@ DATA.recipes = [
     lowExec: true,
     hook: 'Für Tage, an denen Kochen keine Option ist.',
     why: 'Etwas essen schlägt perfekt essen. Der Shake verhindert das Nachmittagsloch mit anschließendem Heißhunger.',
-    ingredients: ['300 ml Milch oder Hafermilch', '1 Banane (gern tiefgekühlt)', '30 g Proteinpulver', '1 EL Mandelmus', 'Prise Zimt'],
+    portions: 1,
+    items: [
+      { id: 'hafermilch', g: 300, label: '300 ml Hafermilch' },
+      { id: 'banane',     g: 120, label: '1 Banane, gern tiefgekühlt' },
+      { id: 'protein_p',  g: 30,  label: '30 g Proteinpulver' },
+      { id: 'mandelmus',  g: 15,  label: '1 EL Mandelmus' },
+      { id: 'gewuerz',    g: 1,   label: 'Prise Zimt' }
+    ],
     steps: ['Alles in den Mixer.', '40 Sekunden mixen.', 'Trinken. Fertig.'],
     swap: 'Kein Mixer? Shaker und Instant-Haferflocken.'
   },
@@ -65,7 +98,16 @@ DATA.recipes = [
     lowExec: true,
     hook: 'Warm, salzig, tröstlich — ohne Lieferdienst.',
     why: 'Warme, salzige Comfort-Food-Reize ohne die Zucker-Fett-Kombination von Fast Food.',
-    ingredients: ['1 EL Misopaste', '500 ml Wasser', '1 Portion Soba- oder Ramennudeln', '1 Ei', 'Handvoll Spinat (TK)', 'Frühlingszwiebel, Sesamöl'],
+    portions: 1,
+    items: [
+      { id: 'miso',      g: 18,  label: '1 EL Misopaste' },
+      { id: 'wasser',    g: 500, label: '500 ml Wasser' },
+      { id: 'soba',      g: 80,  label: '1 Portion Sobanudeln' },
+      { id: 'ei',        g: 60,  label: '1 Ei' },
+      { id: 'spinat_tk', g: 80,  label: 'Handvoll Blattspinat, TK' },
+      { id: 'lauch',     g: 15,  label: 'Frühlingszwiebel' },
+      { id: 'sesamoel',  g: 5,   label: 'Sesamöl' }
+    ],
     steps: ['Wasser aufkochen, Nudeln hinein.', 'Nach 3 Minuten Ei vorsichtig dazu.', 'Spinat dazu, 2 Minuten.', 'Herd aus, Miso einrühren — nicht mehr kochen.', 'Sesamöl und Frühlingszwiebel darüber.'],
     swap: 'Mehr Protein: Edamame oder Räuchertofu.'
   },
@@ -76,7 +118,15 @@ DATA.recipes = [
     lowExec: true,
     hook: '5 Min Arbeit, 25 Min Ofen. In der Zeit machst du etwas anderes.',
     why: 'Der Ofen arbeitet, du nicht. Passive Wartezeit lässt sich mit einer Bewegungseinheit füllen.',
-    ingredients: ['2 Süßkartoffeln, gewürfelt', '1 Dose Kichererbsen, abgespült', '2 EL Olivenöl', '1 TL Paprika, 1 TL Kreuzkümmel', 'Tahini-Zitronen-Sauce'],
+    portions: 2,
+    items: [
+      { id: 'suesskart', g: 500, label: '2 Süßkartoffeln, gewürfelt' },
+      { id: 'kicher',    g: 240, label: '1 Dose Kichererbsen, abgespült' },
+      { id: 'olivenoel', g: 25,  label: '2 EL Olivenöl' },
+      { id: 'gewuerz',   g: 6,   label: '1 TL Paprika, 1 TL Kreuzkümmel' },
+      { id: 'tahini',    g: 30,  label: 'Tahini für die Sauce' },
+      { id: 'zitrone',   g: 15,  label: 'Zitronensaft' }
+    ],
     steps: ['Ofen auf 220 °C.', 'Alles auf ein Blech, Öl und Gewürze, mischen.', '25 Minuten backen, einmal wenden.', 'Sauce darüber.'],
     swap: 'Sauce zu aufwendig: Joghurt, Zitrone, Salz.'
   },
@@ -87,7 +137,14 @@ DATA.recipes = [
     lowExec: true,
     hook: 'Null Abwasch. Wirklich null.',
     why: 'Hoher Proteinanteil sättigt lange und dämpft den Impuls, zwei Stunden später Snacks zu suchen.',
-    ingredients: ['1 Vollkorn-Wrap', '150 g Hüttenkäse', 'Handvoll Rucola', '1/2 Avocado', 'Zitrone, Pfeffer, Chiliflocken'],
+    portions: 1,
+    items: [
+      { id: 'wrap_vk',  g: 60,  label: '1 Vollkorn-Wrap' },
+      { id: 'huettenk', g: 150, label: '150 g Hüttenkäse' },
+      { id: 'rucola',   g: 25,  label: 'Handvoll Rucola' },
+      { id: 'avocado',  g: 70,  label: '1/2 Avocado' },
+      { id: 'zitrone',  g: 5,   label: 'Zitrone, Pfeffer, Chiliflocken' }
+    ],
     steps: ['Hüttenkäse auf den Wrap streichen.', 'Rest darauflegen, würzen.', 'Rollen, halbieren, essen.'],
     swap: 'Herzhafter: Räucherlachs oder Putenbrust dazu.'
   },
@@ -98,7 +155,14 @@ DATA.recipes = [
     lowExec: true,
     hook: 'Für den Abend-Craving — ohne dass er entgleist.',
     why: 'Heißhunger ignorieren funktioniert selten. Ihn mit etwas Proteinreichem bedienen schon.',
-    ingredients: ['200 g Skyr', '1 TL Backkakao', '1 TL Ahornsirup oder Süßstoff', 'Prise Salz', '10 g dunkle Schokolade, gehackt'],
+    portions: 1,
+    items: [
+      { id: 'skyr',       g: 200, label: '200 g Skyr' },
+      { id: 'kakao',      g: 5,   label: '1 TL Backkakao' },
+      { id: 'ahornsirup', g: 7,   label: '1 TL Ahornsirup' },
+      { id: 'salz',       g: 0.3, label: 'Prise Salz' },
+      { id: 'schoko_d',   g: 10,  label: '10 g dunkle Schokolade, gehackt' }
+    ],
     steps: ['Skyr, Kakao, Süße und Salz verrühren.', 'Schokostückchen darüber.', 'Essen. Kein schlechtes Gewissen.'],
     swap: 'Erdnussmus hinein für die Salzig-Süß-Kombination.'
   }

@@ -12,21 +12,15 @@
    Fremde Adressen (Supabase, CDN) fasst der Worker nicht an.
    ============================================================ */
 
-const CACHE = 'leaner-v6';
+const CACHE = 'leaner-v8';
 
+/* Nur das Nötigste vorab. Alles andere landet automatisch im Cache,
+   sobald es einmal geladen wurde. Fehlt eine Datei, kippt die
+   Installation trotzdem nicht (siehe catch unten). */
 const ASSETS = [
   './',
   './index.html',
-  './styles.css',
-  './config.js',
-  './cloud.js',
-  './icons.js',
-  './data.js',
-  './app.js',
-  './manifest.json',
-  './icons/icon.svg',
-  './brand/mark.svg',
-  './brand/logo.svg'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (e) => {
