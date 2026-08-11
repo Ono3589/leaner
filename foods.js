@@ -194,18 +194,44 @@ const FOODS = [
   { id: 'wein_r',     n: 'Rotwein',                 c: 'Getränke', kcal: 85,  p: 0.1,  ch: 2.6,  z: 0.6, f: 0,    sf: 0,    b: 0,    s: 0.01, fvl: 0, beverage: true }
 ];
 
-/* Nachschlagen und Suchen */
+/* ------------------------------------------------------------
+   Nachschlagen und Suchen
+
+   Neben der mitgelieferten Liste gibt es zwei weitere Quellen:
+   eigene Zutaten aus dem Konto und Produkte aus Open Food Facts.
+   Beide werden zur Laufzeit hier registriert, damit Rezepte ihre
+   Zutaten unabhängig von der Herkunft auflösen können.
+------------------------------------------------------------ */
+
 const FOOD_BY_ID = Object.fromEntries(FOODS.map((f) => [f.id, f]));
 
+// id -> Zutat, zur Laufzeit gefüllt (eigene Zutaten, übernommene Produkte)
+const EXTRA_FOODS = {};
+
+function registerFoods(list) {
+  (list || []).forEach((f) => { if (f && f.id) EXTRA_FOODS[f.id] = f; });
+}
+
+function foodById(id) {
+  return FOOD_BY_ID[id] || EXTRA_FOODS[id] || null;
+}
+
+/* Sucht in der mitgelieferten Liste und in allem, was registriert
+   wurde. Eigene Zutaten stehen vorn — wer eine angelegt hat, meint
+   in der Regel genau die. */
 function findFoods(query, limit = 12) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  const starts = [], contains = [];
-  for (const f of FOODS) {
+
+  const own = [], starts = [], contains = [];
+  const consider = (f, bucketOwn) => {
     const name = f.n.toLowerCase();
-    if (name.startsWith(q)) starts.push(f);
-    else if (name.includes(q)) contains.push(f);
-    if (starts.length >= limit) break;
-  }
-  return starts.concat(contains).slice(0, limit);
+    if (name.startsWith(q)) (bucketOwn ? own : starts).push(f);
+    else if (name.includes(q)) (bucketOwn ? own : contains).push(f);
+  };
+
+  Object.values(EXTRA_FOODS).forEach((f) => consider(f, true));
+  FOODS.forEach((f) => consider(f, false));
+
+  return own.concat(starts, contains).slice(0, limit);
 }

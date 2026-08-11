@@ -24,7 +24,8 @@ function recipeNutrition(items) {
   let addedFatG = 0, redMeatG = 0, beverageG = 0;
 
   (items || []).forEach((it) => {
-    const food = FOOD_BY_ID[it.id] || it.food;
+    // foodById löst auch eigene Zutaten und übernommene Produkte auf
+    const food = foodById(it.id) || it.food;
     if (!food) return;
     const g = Number(it.g) || 0;
     const k = g / 100;

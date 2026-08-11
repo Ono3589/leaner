@@ -117,6 +117,129 @@ const Cloud = {
     if (error) throw error;
   },
 
+  /* ---------- Eigene Rezepte ----------
+     Liegen seit dem Umzug als eigene Zeilen statt als JSON-Block
+     im Zustand. Nach außen sehen sie aus wie die mitgelieferten
+     Rezepte, damit die Oberfläche nicht unterscheiden muss. */
+
+  async listRecipes() {
+    if (!this.sb || !this.user) return [];
+    const { data, error } = await this.sb
+      .from('recipes')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(rowToRecipe);
+  },
+
+  async saveRecipe(recipe, computed) {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const row = {
+      user_id: this.user.id,
+      name: recipe.name,
+      hook: recipe.hook || '',
+      minutes: recipe.minutes || 15,
+      portions: recipe.portions || 1,
+      items: recipe.items || [],
+      steps: recipe.steps || [],
+      kcal: computed ? Math.round(computed.perPortion.kcal) : null,
+      protein: computed ? Math.round(computed.perPortion.p) : null,
+      grade: computed && computed.score ? computed.score.grade : null,
+      updated_at: new Date().toISOString()
+    };
+    // Bestehende Rezepte tragen bereits eine uuid aus der Datenbank
+    if (recipe.id && /^[0-9a-f-]{36}$/i.test(recipe.id)) row.id = recipe.id;
+
+    const { data, error } = await this.sb
+      .from('recipes').upsert(row).select().single();
+    if (error) throw error;
+    return rowToRecipe(data);
+  },
+
+  async deleteRecipe(id) {
+    if (!this.sb || !this.user) return;
+    const { error } = await this.sb.from('recipes').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  /* Einmaliger Umzug der Rezepte aus dem alten JSON-Block.
+     legacy_id verhindert Dubletten, falls das zweimal läuft. */
+  async migrateRecipes(list, computeFn) {
+    if (!this.sb || !this.user || !list || !list.length) return 0;
+    const rows = list.map((r) => {
+      const c = computeFn ? computeFn(r) : null;
+      return {
+        user_id: this.user.id,
+        name: r.name,
+        hook: r.hook || '',
+        minutes: r.minutes || 15,
+        portions: r.portions || 1,
+        items: r.items || [],
+        steps: r.steps || [],
+        kcal: c ? Math.round(c.perPortion.kcal) : null,
+        protein: c ? Math.round(c.perPortion.p) : null,
+        grade: c && c.score ? c.score.grade : null,
+        legacy_id: r.id
+      };
+    });
+    const { error } = await this.sb
+      .from('recipes')
+      .upsert(rows, { onConflict: 'user_id,legacy_id', ignoreDuplicates: true });
+    if (error) throw error;
+    return rows.length;
+  },
+
+  /* ---------- Eigene Zutaten ---------- */
+
+  async listCustomFoods() {
+    if (!this.sb || !this.user) return [];
+    const { data, error } = await this.sb.from('custom_foods').select('*').order('name');
+    if (error) throw error;
+    return (data || []).map(rowToFood);
+  },
+
+  async saveCustomFood(food) {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const row = {
+      user_id: this.user.id,
+      name: food.n,
+      category: food.c || 'Eigene',
+      kcal: food.kcal || 0, protein: food.p || 0, carbs: food.ch || 0,
+      sugar: food.z || 0, fat: food.f || 0, sat_fat: food.sf || 0,
+      fibre: food.b || 0, salt: food.s || 0, fvl: food.fvl || 0,
+      barcode: food.barcode || null,
+      source: food.source || 'eigen'
+    };
+    const { data, error } = await this.sb
+      .from('custom_foods')
+      .upsert(row, { onConflict: row.barcode ? 'user_id,barcode' : undefined })
+      .select().single();
+    if (error) throw error;
+    return rowToFood(data);
+  },
+
+  async deleteCustomFood(id) {
+    if (!this.sb || !this.user) return;
+    const { error } = await this.sb.from('custom_foods').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  /* ---------- Produktsuche ---------- */
+
+  async searchProducts(query) {
+    if (!this.sb || !this.user) return [];
+    const { data, error } = await this.sb.functions.invoke('foodsearch', { body: { q: query } });
+    if (error) throw await describeFnError(error);
+    return (data && data.products) || [];
+  },
+
+  async productByBarcode(barcode) {
+    if (!this.sb || !this.user) return null;
+    const { data, error } = await this.sb.functions.invoke('foodsearch', { body: { barcode } });
+    if (error) throw await describeFnError(error);
+    return data && data.products && data.products[0] ? data.products[0] : null;
+  },
+
   /* ---------- Coach ----------
      Ruft die Edge Function auf. Der Anthropic-Key liegt dort als
      Secret und verlässt den Server nie. */
@@ -191,6 +314,38 @@ const Cloud = {
     return steps;
   }
 };
+
+/* Datenbankzeilen in die Formen übersetzen, die der Rest der App
+   ohnehin kennt — so muss die Oberfläche nichts über Tabellen wissen. */
+
+function rowToRecipe(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    hook: row.hook || '',
+    minutes: row.minutes,
+    portions: row.portions,
+    items: row.items || [],
+    steps: row.steps || [],
+    icon: 'bowl',
+    tags: ['Eigenes'],
+    own: true
+  };
+}
+
+function rowToFood(row) {
+  return {
+    id: 'cf:' + row.id,
+    dbId: row.id,
+    n: row.name,
+    c: row.category || 'Eigene',
+    kcal: Number(row.kcal), p: Number(row.protein), ch: Number(row.carbs),
+    z: Number(row.sugar), f: Number(row.fat), sf: Number(row.sat_fat),
+    b: Number(row.fibre), s: Number(row.salt), fvl: Number(row.fvl),
+    barcode: row.barcode || null,
+    source: row.source || 'eigen'
+  };
+}
 
 /* Supabase verpackt Fehler der Edge Function so, dass die eigentliche
    Meldung im Response-Body steckt. Hier wird sie herausgeholt — sonst

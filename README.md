@@ -65,7 +65,10 @@ Danach startet Leaner im Vollbild, mit eigenem Icon, ohne Safari-Leiste.
 | `config.js` | Die zwei öffentlichen Supabase-Werte. Ohne sie läuft alles rein lokal |
 | `cloud.js` | Login, Sync und Coach-Aufruf — alles, was mit dem Backend redet |
 | `supabase/schema.sql` | Tabellen und Sicherheitsregeln, einmal im SQL Editor ausführen |
+| `supabase/schema-2.sql` | Nachtrag: Rezepte, eigene Zutaten, Produktcache |
 | `supabase/functions/coach/` | Der AI-Coach als Edge Function. Hier lebt der API-Key |
+| `supabase/functions/foodsearch/` | Produktsuche über Open Food Facts, mit Zwischenspeicher |
+| `deploy.sh` | Version hochzählen und veröffentlichen, in einem Befehl |
 | `sw.js` | Service Worker, Netzwerk zuerst mit Cache als Rückfall |
 | `manifest.json` | PWA-Metadaten |
 | `brand/mark.svg` | Nur das Zeichen |
@@ -138,6 +141,32 @@ Diese Punkte sind keine Kosmetik — sie sind der Grund, warum die App anders au
 - **Keine roten Warnfarben, kein Shaming.** Verpasste Ziele werden neutral dargestellt.
 - **Sanfter Modus** und **Weniger Animation** sind abschaltbar, `prefers-reduced-motion` wird respektiert.
 - **Timer mit Zeitstempel statt Zähler.** Der Fasten-Timer läuft weiter, auch wenn die App geschlossen wird — Vergessen soll den Fortschritt nicht kosten.
+
+---
+
+## Woher die Zutaten kommen
+
+Drei Quellen, in dieser Reihenfolge durchsucht:
+
+1. **Eigene Zutaten** aus deinem Konto — selbst angelegt oder aus einem Produkt
+   übernommen. Stehen bewusst ganz oben: Wer eine angelegt hat, meint meistens genau die.
+2. **Die mitgelieferte Liste** in `foods.js`, rund 200 Grundzutaten. Liegt im Code,
+   ist damit sofort da und funktioniert offline.
+3. **Open Food Facts** — Millionen europäischer Produkte, nachgereicht nach einer
+   kurzen Tippause.
+
+Wird ein Produkt übernommen, landet es dauerhaft in deinen eigenen Zutaten. Damit
+lassen sich Rezepte auch später und ohne Netz auflösen — die Nährwerte hängen nicht
+an einem fremden Dienst.
+
+Die Suche läuft über eine Edge Function, nicht direkt aus dem Browser. Zwei Gründe:
+Open Food Facts bittet um eine Kennung im User-Agent, die ein Browser nicht setzen
+darf, und erlaubt nur zehn Suchanfragen pro Minute. Ein gemeinsamer Zwischenspeicher
+hält Ergebnisse 30 Tage.
+
+**Barcode-Scannen fehlt bewusst.** Safari unterstützt die dafür nötige Schnittstelle
+bis heute nicht, auf dem iPhone würde es still fehlschlagen. Nachrüstbar über eine
+WebAssembly-Bibliothek, wenn die Textsuche zu mühsam wird.
 
 ---
 

@@ -284,6 +284,46 @@ Falls nicht: In Supabase unter **Edge Functions → coach → Logs** steht, wora
 
 ---
 
+## Schritt 8 — Rezepte, eigene Zutaten und Produktsuche
+
+Diese beiden Schritte kamen später dazu. Ohne sie läuft die App weiter,
+eigene Rezepte bleiben dann aber im alten JSON-Block und die Produktsuche
+liefert nichts.
+
+**Tabellen anlegen.** In Supabase → **SQL Editor** → **New query** →
+kompletten Inhalt von `supabase/schema-2.sql` einfügen → **Run**.
+
+Das legt drei Tabellen an: `recipes` für deine Rezepte, `custom_foods` für
+eigene und übernommene Zutaten, `off_cache` als Zwischenspeicher für
+Produktdaten. Alle mit Row Level Security, `off_cache` sogar ganz ohne
+Client-Zugriff — dort schreibt nur die Edge Function.
+
+Beim ersten Start nach dem Update wandern vorhandene eigene Rezepte
+selbsttätig in die neue Tabelle. Doppelte Einträge sind ausgeschlossen,
+auch wenn der Umzug mehrfach anläuft.
+
+**Produktsuche veröffentlichen.** In Supabase → **Edge Functions** →
+**Deploy a new function** → *via Editor*, Name exakt `foodsearch`, den Inhalt
+von `supabase/functions/foodsearch/index.ts` einfügen → **Deploy**.
+
+Oder im Terminal:
+
+```bash
+npx supabase functions deploy foodsearch
+```
+
+Ein zusätzliches Secret braucht es nicht — die Funktion nutzt die Schlüssel,
+die Supabase ohnehin bereitstellt. Falls der Zwischenspeicher nicht greift,
+steht der Grund unter **Edge Functions → foodsearch → Logs**.
+
+> **Warum die Suche über den Server läuft:** Open Food Facts bittet darum,
+> dass sich Anwendungen im User-Agent zu erkennen geben — genau dieses Feld
+> darf ein Browser nicht setzen. Außerdem sind dort nur zehn Suchanfragen pro
+> Minute erlaubt, was beim Tippen sofort erreicht wäre. Der gemeinsame
+> Zwischenspeicher hält Ergebnisse 30 Tage.
+
+---
+
 ## Aufs iPhone holen
 
 1. Deine Pages-Adresse in **Safari** öffnen. Nicht Chrome — nur Safari kann
