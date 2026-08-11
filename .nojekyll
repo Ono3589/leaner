@@ -1,0 +1,3 @@
+# Diese Datei sagt GitHub Pages, dass es die Seiten unverändert ausliefern soll,
+# statt sie durch Jekyll zu schicken. Ohne sie werden Ordner und Dateien, die mit
+# einem Unterstrich beginnen, stillschweigend ignoriert.

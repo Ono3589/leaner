@@ -1,0 +1,11 @@
+# macOS legt diese Dateien in jedem Ordner an — sie gehören nicht ins Repository
+.DS_Store
+._*
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
+
+# Umgebungsvariablen — hier landen Secrets, die nie ins Repo dürfen
+.env
+.env.*
