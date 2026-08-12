@@ -145,6 +145,7 @@ const Cloud = {
       kcal: computed ? Math.round(computed.perPortion.kcal) : null,
       protein: computed ? Math.round(computed.perPortion.p) : null,
       grade: computed && computed.score ? computed.score.grade : null,
+      photo: recipe.photo || null,
       updated_at: new Date().toISOString()
     };
     // Bestehende Rezepte tragen bereits eine uuid aus der Datenbank
@@ -208,6 +209,7 @@ const Cloud = {
       sugar: food.z || 0, fat: food.f || 0, sat_fat: food.sf || 0,
       fibre: food.b || 0, salt: food.s || 0, fvl: food.fvl || 0,
       barcode: food.barcode || null,
+      photo_url: food.photo || null,
       source: food.source || 'eigen'
     };
     const { data, error } = await this.sb
@@ -221,6 +223,65 @@ const Cloud = {
   async deleteCustomFood(id) {
     if (!this.sb || !this.user) return;
     const { error } = await this.sb.from('custom_foods').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  /* ---------- Bilder ----------
+     Der Bucket "photos" ist privat. Jede Datei liegt unter der
+     eigenen Kennung, und die Zugriffsregeln lassen nur diesen
+     Ordner zu — auch mit dem öffentlichen Schlüssel kommt niemand
+     an fremde Bilder. */
+
+  async uploadPhoto(blob, kind, ext) {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || 'webp'}`;
+    const path = `${this.user.id}/${kind || 'misc'}/${name}`;
+    const { error } = await this.sb.storage
+      .from('photos')
+      .upload(path, blob, { contentType: blob.type, upsert: false });
+    if (error) throw error;
+    return path;
+  },
+
+  async signPhoto(path, seconds = 3600) {
+    if (!this.sb || !this.user) return null;
+    const { data, error } = await this.sb.storage
+      .from('photos').createSignedUrl(path, seconds);
+    if (error) throw error;
+    return data ? data.signedUrl : null;
+  },
+
+  async removePhoto(path) {
+    if (!this.sb || !this.user || !path || /^https?:/.test(path)) return;
+    await this.sb.storage.from('photos').remove([path]);
+  },
+
+  /* ---------- Fortschrittsfotos ---------- */
+
+  async listProgressPhotos() {
+    if (!this.sb || !this.user) return [];
+    const { data, error } = await this.sb
+      .from('progress_photos').select('*').order('taken_on', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async addProgressPhoto(path, weightKg, note) {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const { data, error } = await this.sb.from('progress_photos').insert({
+      user_id: this.user.id,
+      path,
+      weight_kg: weightKg || null,
+      note: note || null
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteProgressPhoto(id, path) {
+    if (!this.sb || !this.user) return;
+    await this.removePhoto(path);
+    const { error } = await this.sb.from('progress_photos').delete().eq('id', id);
     if (error) throw error;
   },
 
@@ -327,6 +388,7 @@ function rowToRecipe(row) {
     portions: row.portions,
     items: row.items || [],
     steps: row.steps || [],
+    photo: row.photo || null,
     icon: 'bowl',
     tags: ['Eigenes'],
     own: true
@@ -343,6 +405,7 @@ function rowToFood(row) {
     z: Number(row.sugar), f: Number(row.fat), sf: Number(row.sat_fat),
     b: Number(row.fibre), s: Number(row.salt), fvl: Number(row.fvl),
     barcode: row.barcode || null,
+    photo: row.photo_url || null,
     source: row.source || 'eigen'
   };
 }

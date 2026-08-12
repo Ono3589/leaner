@@ -692,6 +692,67 @@ input[type=range]::-moz-range-thumb {
 }
 .note-warn b { font-weight: 600; }
 
+/* ---------- Fotos ---------- */
+
+.photo-wrap {
+  position: relative; overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+}
+.photo-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Kein Bild oder Link abgelaufen — Fläche bleibt ruhig statt kaputt */
+.photo-wrap.photo-missing img { display: none; }
+
+.photo-thumb { width: 46px; height: 46px; flex: none; border-radius: 10px; }
+.item-photo   { width: 52px; height: 52px; flex: none; border-radius: var(--r-sm); }
+.sr-photo     { width: 34px; height: 34px; flex: none; border-radius: 8px; }
+
+.photo-hero {
+  width: 100%; aspect-ratio: 16 / 10;
+  border-radius: var(--r-lg); margin-bottom: 14px;
+}
+
+.photo-empty {
+  display: grid; place-items: center;
+  color: var(--text-faint); height: 100%;
+}
+.photo-empty .ic { width: 22px; height: 22px; }
+
+.photo-add {
+  width: 100%; aspect-ratio: 16 / 10;
+  border: 1px dashed var(--line); border-radius: var(--r-lg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; color: var(--text-faint); font-size: 13.5px;
+  background: var(--surface);
+}
+.photo-add .ic { width: 24px; height: 24px; }
+
+.photo-actions { display: flex; gap: 8px; margin-bottom: 14px; }
+.photo-actions .btn { flex: 1; }
+
+.entry-photo {
+  color: var(--text-faint); padding: 4px;
+}
+.entry-photo .ic { width: 16px; height: 16px; }
+.entry-photo.has { color: var(--accent); }
+
+/* Fortschrittsfotos */
+.prog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.prog-item { position: relative; }
+.prog-item .photo-wrap { aspect-ratio: 3 / 4; }
+.prog-date {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 14px 8px 6px; font-size: 10.5px; font-weight: 600; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.6));
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-status {
+  font-size: 13px; color: var(--text-dim);
+  display: flex; align-items: center; gap: 8px; margin: 8px 0;
+}
+
 /* ---------- Login ---------- */
 
 .gate {

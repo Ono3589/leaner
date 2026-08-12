@@ -212,26 +212,40 @@ function registerFoods(list) {
   (list || []).forEach((f) => { if (f && f.id) EXTRA_FOODS[f.id] = f; });
 }
 
-function foodById(id) {
-  return FOOD_BY_ID[id] || EXTRA_FOODS[id] || null;
+function dishList() {
+  return typeof DISHES !== 'undefined' ? DISHES : [];
 }
 
-/* Sucht in der mitgelieferten Liste und in allem, was registriert
-   wurde. Eigene Zutaten stehen vorn — wer eine angelegt hat, meint
-   in der Regel genau die. */
+function foodById(id) {
+  return FOOD_BY_ID[id]
+      || EXTRA_FOODS[id]
+      || dishList().find((d) => d.id === id)
+      || null;
+}
+
+/* Sucht über drei Quellen. Sortiert wird zuerst nach Treffergüte
+   (Name beginnt mit der Eingabe schlägt Name enthält sie), dann
+   nach Herkunft: eigene Zutaten, fertige Gerichte, Grundzutaten.
+
+   Die Reihenfolge ist Absicht. Wer "pizza" tippt, will das Gericht
+   und nicht Mehl; wer eine eigene Zutat angelegt hat, meint sie. */
 function findFoods(query, limit = 12) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
 
-  const own = [], starts = [], contains = [];
-  const consider = (f, bucketOwn) => {
-    const name = f.n.toLowerCase();
-    if (name.startsWith(q)) (bucketOwn ? own : starts).push(f);
-    else if (name.includes(q)) (bucketOwn ? own : contains).push(f);
+  const hits = [];
+  const scan = (list, rank) => {
+    for (const f of list) {
+      const name = f.n.toLowerCase();
+      if (name.startsWith(q)) hits.push({ f, quality: 0, rank });
+      else if (name.includes(q)) hits.push({ f, quality: 1, rank });
+    }
   };
 
-  Object.values(EXTRA_FOODS).forEach((f) => consider(f, true));
-  FOODS.forEach((f) => consider(f, false));
+  scan(Object.values(EXTRA_FOODS), 0);
+  scan(dishList(), 1);
+  scan(FOODS, 2);
 
-  return own.concat(starts, contains).slice(0, limit);
+  hits.sort((a, b) => a.quality - b.quality || a.rank - b.rank);
+  return hits.slice(0, limit).map((h) => h.f);
 }

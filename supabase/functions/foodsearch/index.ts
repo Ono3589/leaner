@@ -90,6 +90,8 @@ function mapProduct(p: Off): Off | null {
     b: num(n['fiber_100g']),
     s: Math.round(salt * 100) / 100,
     fvl: num(n['fruits-vegetables-nuts-estimate-from-ingredients_100g']),
+    // Kleines Vorschaubild reicht — die Liste zeigt es in 40 Pixeln
+    photo: (p.image_front_thumb_url || p.image_front_small_url || p.image_thumb_url || null) as string | null,
     beverage: isBeverage || undefined,
     water: isWater || undefined,
     offGrade: p.nutrition_grades ? String(p.nutrition_grades).toUpperCase() : null,
@@ -99,7 +101,8 @@ function mapProduct(p: Off): Off | null {
 
 const FIELDS = [
   'code', 'product_name', 'product_name_de', 'brands',
-  'categories_tags', 'nutrition_grades', 'nutriments'
+  'categories_tags', 'nutrition_grades', 'nutriments',
+  'image_front_thumb_url', 'image_front_small_url', 'image_thumb_url'
 ].join(',');
 
 Deno.serve(async (req) => {

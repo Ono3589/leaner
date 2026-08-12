@@ -324,6 +324,33 @@ steht der Grund unter **Edge Functions → foodsearch → Logs**.
 
 ---
 
+## Schritt 9 — Fotos
+
+**Tabellen und Speicherort anlegen.** SQL Editor → Inhalt von
+`supabase/schema-3.sql` → **Run**.
+
+Das legt den Speicherbereich `photos` an, hängt Bildspalten an die
+bestehenden Tabellen und erstellt `progress_photos`.
+
+Der Speicherbereich ist **privat**. Jede Datei liegt unter deiner
+Kennung, und die Zugriffsregeln vergleichen den ersten Ordnernamen mit
+der angemeldeten Kennung. Angezeigt werden Bilder über Links, die eine
+Stunde gelten und die App bei Bedarf erzeugt. Selbst wer den
+öffentlichen Schlüssel hat, kommt an keine fremden Fotos.
+
+**Prüfen:** Unter **Storage** muss jetzt ein Bereich `photos` stehen,
+mit *Public* auf *off* und einer Größenbegrenzung von 5 MB.
+
+Danach in der App: Rezept anlegen → **Foto aufnehmen oder auswählen**.
+Nach dem Speichern erscheint kurz die Dateigröße — bei einem
+iPhone-Foto sollten dort um die 130 KB stehen. Steht dort deutlich
+mehr, hat das Verkleinern nicht gegriffen.
+
+> Der kostenlose Speicher bei Supabase liegt bei 1 GB. Bei rund 130 KB
+> pro Bild sind das etwa siebentausend Fotos.
+
+---
+
 ## Aufs iPhone holen
 
 1. Deine Pages-Adresse in **Safari** öffnen. Nicht Chrome — nur Safari kann

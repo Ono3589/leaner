@@ -13,7 +13,7 @@ const KEY = 'leaner.state.v1';
 /* Beim Hochladen einer neuen Fassung mitzählen. Steht im Profil ganz
    unten — so lässt sich auf einen Blick sehen, ob das iPhone noch eine
    alte Version aus dem Zwischenspeicher bedient. */
-const BUILD = '11 · 12.08.2026';
+const BUILD = '9 · 11.08.2026';
 
 const DEFAULT_STATE = {
   xpTotal: 0,
@@ -810,7 +810,6 @@ function foodResultHtml(f) {
     : Math.round(f.kcal);
 
   return `<button class="sr" data-pick="${escapeHtml(f.id)}">
-    ${f.photo ? photoBox(f.photo, 'sr-photo', 'image') : ''}
     <span class="grow">
       <div class="sr-name">${escapeHtml(f.n)}</div>
       <div class="sr-cat">${herkunft} · ${menge}</div>
@@ -970,40 +969,6 @@ function renderDiary() {
     b.addEventListener('click', () => {
       removeDiaryEntry(b.dataset.del); haptic(8); renderDiary();
     }));
-
-  body.querySelectorAll('[data-photo-for]').forEach((b) =>
-    b.addEventListener('click', () => attachEntryPhoto(b.dataset.photoFor)));
-
-  fillPhotos(body);
-}
-
-/* Foto an einen Tagebucheintrag hängen. Ein Tippen, kein Umweg —
-   wer unterwegs isst, fotografiert eher als er tippt. */
-async function attachEntryPhoto(eid) {
-  const list = (S.diary || {})[S.todayKey] || [];
-  const entry = list.find((e) => e.eid === eid);
-  if (!entry) return;
-
-  if (entry.photo) {
-    if (!confirm('Foto entfernen?')) return;
-    Cloud.removePhoto(entry.photo);
-    delete entry.photo;
-    save(); renderDiary();
-    return;
-  }
-
-  try {
-    const shot = await captureAndUpload('diary', (t) => toast(t, 'clock'));
-    if (!shot) return;
-    entry.photo = shot.path;
-    save();
-    haptic(10);
-    toast(`Foto gespeichert · ${Math.round(shot.bytes / 1024)} KB`, 'check');
-    renderDiary();
-  } catch (e) {
-    console.warn('Foto:', e.message || e);
-    toast('Foto konnte nicht gespeichert werden');
-  }
 }
 
 function macroBar(name, value, goal, cls) {
@@ -1019,15 +984,12 @@ function macroBar(name, value, goal, cls) {
 
 function entryHtml(e) {
   return `<div class="entry">
-    ${e.photo ? photoBox(e.photo, 'photo-thumb', 'image') : ''}
     <span class="grow">
       <div class="entry-name">${escapeHtml(e.name)}</div>
       <div class="entry-sub">${e.p ? `${Math.round(e.p)} g Eiweiß · ` : ''}${
         e.portions && e.portions !== 1 ? e.portions + ' Portionen' : ''}</div>
     </span>
     <span class="entry-kcal">${Math.round(e.kcal)} kcal</span>
-    ${Cloud.user ? `<button class="entry-photo ${e.photo ? 'has' : ''}" data-photo-for="${e.eid}"
-       aria-label="Foto">${icon('camera')}</button>` : ''}
     <button class="entry-del" data-del="${e.eid}" aria-label="Entfernen">${icon('close')}</button>
   </div>`;
 }
@@ -1084,20 +1046,6 @@ function renderRecipeList() {
   body.querySelectorAll('.recipe').forEach((b) => b.addEventListener('click', () => {
     openRecipe(recipeById(b.dataset.id));
   }));
-
-  fillPhotos(body);
-}
-
-/* Bildfläche — zeigt das Foto, sonst ruhig ein Symbol.
-   Gefüllt wird erst nach dem Zeichnen über fillPhotos(). */
-function photoBox(path, cls, fallbackIcon) {
-  if (!path) {
-    return `<span class="photo-wrap ${cls} photo-missing">
-      <span class="photo-empty">${icon(fallbackIcon || 'image')}</span></span>`;
-  }
-  return `<span class="photo-wrap ${cls}">
-    <img data-photo="${escapeHtml(path)}" alt="">
-  </span>`;
 }
 
 function recipeHtml(r) {
@@ -1105,9 +1053,7 @@ function recipeHtml(r) {
   const kcal = info ? Math.round(info.perPortion.kcal) : r.kcal;
   const prot = info ? Math.round(info.perPortion.p) : r.protein;
   return `<button class="item recipe" data-id="${r.id}">
-    ${r.photo
-      ? photoBox(r.photo, 'item-photo', 'bowl')
-      : `<span class="item-ico i-food">${icon(r.icon || 'bowl')}</span>`}
+    <span class="item-ico i-food">${icon(r.icon || 'bowl')}</span>
     <span class="grow">
       <div class="item-title">${escapeHtml(r.name)}</div>
       <div class="item-meta">${escapeHtml(r.hook || '')}</div>
@@ -1130,9 +1076,7 @@ function openRecipe(r) {
   const p = info ? info.perPortion : null;
 
   openSheet(`
-    ${r.photo
-      ? photoBox(r.photo, 'photo-hero', 'bowl')
-      : `<div class="sheet-ico">${icon(r.icon || 'bowl')}</div>`}
+    <div class="sheet-ico">${icon(r.icon || 'bowl')}</div>
     <h2 class="sheet-title">${escapeHtml(r.name)}</h2>
     <p class="muted small" style="margin:0 0 14px">${escapeHtml(r.hook || '')}</p>
 
@@ -1199,8 +1143,6 @@ function openRecipe(r) {
     : `<button class="btn btn-ghost btn-block" id="copyBtn" style="margin-top:8px">Als eigenes Rezept kopieren</button>`}
     <div class="tiny faint center" style="margin-top:10px">Gekocht zählt auch, wenn du abgekürzt hast.</div>
   `);
-
-  fillPhotos(sheetBody);
 
   const why = document.getElementById('scoreWhy');
   if (why) why.addEventListener('click', () => openScoreDetail(r, info));
@@ -1391,8 +1333,6 @@ function openAddSheet(mealId) {
           haptic(12); toast('Eingetragen', 'check'); closeSheet(); renderFood();
         }
       }));
-
-      fillPhotos(results);
 
       results.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {
         const picked = lastFoods.find((f) => String(f.id) === b.dataset.pick);
@@ -1585,8 +1525,6 @@ function openRecipeEditor(existing) {
       Zutaten in Gramm — Nährwerte und Nutri-Score rechnen sich mit.
     </p>
 
-    <div id="rPhotoBox" style="margin-bottom:14px"></div>
-
     <div class="field"><label>Name</label>
       <input id="rName" value="${escapeHtml(draft.name)}" placeholder="Linsendal mit Spinat"></div>
 
@@ -1625,53 +1563,6 @@ function openRecipeEditor(existing) {
   const previewEl = document.getElementById('rPreview');
   const search = document.getElementById('rSearch');
   const results = document.getElementById('rResults');
-  const photoBoxEl = document.getElementById('rPhotoBox');
-
-  /* Foto zum Rezept. Ohne Konto nicht möglich — dann bleibt der
-     Bereich weg, statt einen Knopf anzubieten, der nichts tut. */
-  const paintPhoto = () => {
-    if (!Cloud.sb || !Cloud.user) { photoBoxEl.innerHTML = ''; return; }
-    photoBoxEl.innerHTML = draft.photo
-      ? `${photoBox(draft.photo, 'photo-hero', 'bowl')}
-         <div class="photo-actions">
-           <button class="btn btn-sm" id="rPhotoChange">Anderes Foto</button>
-           <button class="btn btn-sm btn-ghost" id="rPhotoDel">Entfernen</button>
-         </div>`
-      : `<button class="photo-add" id="rPhotoAdd">${icon('camera')}Foto aufnehmen oder auswählen</button>`;
-    fillPhotos(photoBoxEl);
-    wirePhoto();
-  };
-
-  const takePhoto = async () => {
-    const status = document.createElement('div');
-    status.className = 'photo-status';
-    photoBoxEl.appendChild(status);
-    try {
-      const shot = await captureAndUpload('recipes', (t) => { status.textContent = t; });
-      if (!shot) { status.remove(); return; }
-      if (draft.photo) Cloud.removePhoto(draft.photo);
-      draft.photo = shot.path;
-      haptic(10);
-      toast(`Foto gespeichert · ${Math.round(shot.bytes / 1024)} KB`, 'check');
-    } catch (e) {
-      toast('Foto konnte nicht gespeichert werden');
-      console.warn('Foto:', e.message || e);
-    }
-    paintPhoto();
-  };
-
-  function wirePhoto() {
-    const add = document.getElementById('rPhotoAdd');
-    if (add) add.addEventListener('click', () => { captureFields(); takePhoto(); });
-    const chg = document.getElementById('rPhotoChange');
-    if (chg) chg.addEventListener('click', () => { captureFields(); takePhoto(); });
-    const del = document.getElementById('rPhotoDel');
-    if (del) del.addEventListener('click', () => {
-      Cloud.removePhoto(draft.photo);
-      draft.photo = null;
-      paintPhoto();
-    });
-  }
 
   const paintItems = () => {
     itemsEl.innerHTML = draft.items.length ? draft.items.map((it, i) => {
@@ -1728,8 +1619,6 @@ function openRecipeEditor(existing) {
       results.innerHTML = list.map(foodResultHtml).join('') +
         (loading ? '<div class="sr"><span class="sr-cat">Produkte werden gesucht…</span></div>' : '');
 
-      fillPhotos(results);
-
       results.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', async () => {
         const picked = lastResults.find((f) => String(f.id) === b.dataset.pick);
         if (!picked) return;
@@ -1756,7 +1645,6 @@ function openRecipeEditor(existing) {
   document.getElementById('rPortions').addEventListener('input', paintPreview);
   paintItems();
   paintPreview();
-  paintPhoto();
 
   /* Getippte Felder in den Entwurf übernehmen — nötig, bevor der
      Editor zwischendurch verlassen wird. */
@@ -1784,7 +1672,6 @@ function openRecipeEditor(existing) {
       portions: Math.max(1, draft.portions),
       items: draft.items.filter((i) => i.g > 0),
       steps: draft.steps,
-      photo: draft.photo || null,
       tags: ['Eigenes'],
       own: true
     };
@@ -2295,84 +2182,6 @@ function localCoachReply(text) {
 }
 
 /* ------------------------------------------------------------
-   Fortschrittsfotos
-
-   Aussagekräftiger als die Waage, weil sie zeigen, was sich
-   tatsächlich verändert — Gewicht schwankt tageweise um mehr,
-   als in einem Monat an Fett dazukommt oder verschwindet.
-
-   Gespeichert wird das Gewicht des Tages mit, damit später beides
-   nebeneinander steht.
------------------------------------------------------------- */
-
-let progressCache = null;
-
-async function paintProgressPhotos() {
-  const box = document.getElementById('progBox');
-  if (!box) return;
-
-  if (!progressCache) {
-    box.innerHTML = '<div class="tiny faint">Wird geladen…</div>';
-    try {
-      progressCache = await Cloud.listProgressPhotos();
-    } catch (e) {
-      box.innerHTML = `<div class="tiny faint">Fotos nicht erreichbar. Wurde
-        <b>schema-3.sql</b> schon ausgeführt?</div>`;
-      return;
-    }
-  }
-
-  if (!progressCache.length) {
-    box.innerHTML = `<div class="card"><div class="tiny muted">
-      Noch keine Fotos. Ein Bild alle zwei Wochen, gleiche Stelle, gleiches Licht —
-      nach zwei Monaten siehst du mehr als auf jeder Waage.
-    </div></div>`;
-    return;
-  }
-
-  box.innerHTML = `<div class="prog-grid">
-    ${progressCache.map((p) => `
-      <button class="prog-item" data-prog="${p.id}">
-        ${photoBox(p.path, '', 'user')}
-        <span class="prog-date">${new Date(p.taken_on).toLocaleDateString('de-DE',
-          { day: '2-digit', month: '2-digit', year: '2-digit' })}${
-          p.weight_kg ? ' · ' + p.weight_kg + ' kg' : ''}</span>
-      </button>`).join('')}
-  </div>`;
-
-  fillPhotos(box);
-
-  box.querySelectorAll('[data-prog]').forEach((b) => b.addEventListener('click', async () => {
-    const p = progressCache.find((x) => x.id === b.dataset.prog);
-    if (!p) return;
-    if (!confirm('Dieses Foto löschen?')) return;
-    try {
-      await Cloud.deleteProgressPhoto(p.id, p.path);
-      progressCache = progressCache.filter((x) => x.id !== p.id);
-      paintProgressPhotos();
-      toast('Gelöscht');
-    } catch (e) {
-      toast('Löschen fehlgeschlagen');
-    }
-  }));
-}
-
-async function takeProgressPhoto() {
-  try {
-    const shot = await captureAndUpload('progress', (t) => toast(t, 'clock'));
-    if (!shot) return;
-    const row = await Cloud.addProgressPhoto(shot.path, S.profile.weightKg || null, null);
-    progressCache = [row].concat(progressCache || []);
-    haptic(10);
-    toast(`Foto gespeichert · ${Math.round(shot.bytes / 1024)} KB`, 'check');
-    paintProgressPhotos();
-  } catch (e) {
-    console.warn('Fortschrittsfoto:', e.message || e);
-    toast('Foto konnte nicht gespeichert werden');
-  }
-}
-
-/* ------------------------------------------------------------
    Körperdaten und Tagesziel
 
    Bewusst zurückhaltend: Die App rechnet, empfiehlt einen Bereich
@@ -2621,15 +2430,6 @@ function renderProfile() {
       })()}
     </div>
 
-    ${Cloud.user ? `
-    <div class="section">
-      <div class="section-head">
-        <h3 class="section-title">Fortschrittsfotos</h3>
-        <button class="section-action" id="progAdd">Foto aufnehmen</button>
-      </div>
-      <div id="progBox"></div>
-    </div>` : ''}
-
     <div class="section">
       <div class="section-head"><h3 class="section-title">Konto</h3></div>
       <div class="card">
@@ -2694,10 +2494,6 @@ function renderProfile() {
     const b = document.getElementById(id);
     if (b) b.addEventListener('click', openBodySheet);
   });
-
-  const progAdd = document.getElementById('progAdd');
-  if (progAdd) progAdd.addEventListener('click', takeProgressPhoto);
-  if (document.getElementById('progBox')) paintProgressPhotos();
 
   const diag = document.getElementById('diagBtn');
   if (diag) diag.addEventListener('click', runDiagnostics);
