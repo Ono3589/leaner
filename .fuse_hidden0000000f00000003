@@ -12,7 +12,7 @@
    Fremde Adressen (Supabase, CDN) fasst der Worker nicht an.
    ============================================================ */
 
-const CACHE = 'leaner-v12';
+const CACHE = 'leaner-v11';
 
 /* Nur das Nötigste vorab. Alles andere landet automatisch im Cache,
    sobald es einmal geladen wurde. Fehlt eine Datei, kippt die

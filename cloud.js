@@ -344,18 +344,66 @@ const Cloud = {
 
     try {
       await this.pull();
-      add(true, 'Datenbank lesen', 'ok');
+      add(true, 'Fortschritt lesen', 'ok');
     } catch (e) {
-      add(false, 'Datenbank lesen', dbHint(e));
+      add(false, 'Fortschritt lesen', dbHint(e, 'schema.sql'));
       return steps;
     }
 
     try {
       const row = await this.pull();
       await this.push(row && row.state ? row.state : {});
-      add(true, 'Datenbank schreiben', 'ok');
+      add(true, 'Fortschritt speichern', 'ok');
     } catch (e) {
-      add(false, 'Datenbank schreiben', dbHint(e));
+      add(false, 'Fortschritt speichern', dbHint(e, 'schema.sql'));
+    }
+
+    /* Ab hier wird jeder Punkt einzeln geprüft und nicht abgebrochen —
+       so sieht man auf einen Blick, was fehlt und was schon läuft. */
+
+    for (const [table, label, file] of [
+      ['recipes', 'Tabelle Rezepte', 'schema-2.sql'],
+      ['custom_foods', 'Tabelle eigene Zutaten', 'schema-2.sql'],
+      ['progress_photos', 'Tabelle Fortschrittsfotos', 'schema-3.sql']
+    ]) {
+      try {
+        const { error } = await this.sb.from(table).select('id').limit(1);
+        if (error) throw error;
+        add(true, label, 'ok');
+      } catch (e) {
+        add(false, label, dbHint(e, file));
+      }
+    }
+
+    // Speicherbereich wirklich ausprobieren: hochladen, Link erzeugen, aufräumen
+    try {
+      const png = Uint8Array.from(atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+      ), (c) => c.charCodeAt(0));
+      const path = `${this.user.id}/test/diag-${Date.now()}.png`;
+
+      const up = await this.sb.storage.from('photos')
+        .upload(path, new Blob([png], { type: 'image/png' }), { contentType: 'image/png' });
+      if (up.error) throw up.error;
+
+      const signed = await this.sb.storage.from('photos').createSignedUrl(path, 60);
+      if (signed.error) throw signed.error;
+
+      await this.sb.storage.from('photos').remove([path]);
+      add(true, 'Bildspeicher', 'Hochladen, Anzeigen und Löschen funktionieren');
+    } catch (e) {
+      add(false, 'Bildspeicher', storageHint(e));
+    }
+
+    // Edge Functions
+    try {
+      const { data, error } = await this.sb.functions.invoke('foodsearch', { body: { q: 'haferflocken' } });
+      if (error) throw await describeFnError(error);
+      const n = (data && data.products) ? data.products.length : 0;
+      add(n > 0, 'Produktsuche',
+        n > 0 ? `${n} Treffer für "haferflocken"` : 'Erreichbar, aber ohne Treffer');
+    } catch (e) {
+      add(false, 'Produktsuche', e.message);
     }
 
     try {
@@ -434,13 +482,33 @@ async function describeFnError(error) {
   return new Error(error && error.message ? error.message : 'unbekannter Fehler');
 }
 
-function dbHint(e) {
+function dbHint(e, file) {
   const m = (e && e.message ? e.message : '').toLowerCase();
-  if (m.includes('does not exist') || m.includes('schema cache')) {
-    return 'Tabelle fehlt — schema.sql wurde noch nicht ausgeführt (Schritt 4)';
+  const f = file || 'schema.sql';
+  if (m.includes('does not exist') || m.includes('schema cache') || m.includes('not find the table')) {
+    return `Tabelle fehlt — ${f} wurde noch nicht im SQL Editor ausgeführt`;
   }
   if (m.includes('row-level security') || m.includes('policy')) {
-    return 'Sicherheitsregeln greifen nicht — schema.sql nochmal komplett ausführen';
+    return `Sicherheitsregeln greifen nicht — ${f} nochmal komplett ausführen`;
+  }
+  return e.message;
+}
+
+function storageHint(e) {
+  const m = (e && e.message ? e.message : '').toLowerCase();
+  if (m.includes('bucket not found') || m.includes('not found')) {
+    return 'Der Bereich "photos" fehlt — schema-3.sql wurde noch nicht ausgeführt';
+  }
+  if (m.includes('row-level security') || m.includes('policy') || m.includes('unauthorized')) {
+    return 'Die Zugriffsregeln fehlen. In schema-3.sql sind das die vier create-policy-Blöcke — ' +
+           'manche Projekte lassen sie im SQL Editor nicht zu. Dann unter Storage → photos → Policies ' +
+           'von Hand anlegen, jeweils mit der Bedingung (storage.foldername(name))[1] = auth.uid()::text';
+  }
+  if (m.includes('mime') || m.includes('content type')) {
+    return 'Der Dateityp wird nicht angenommen — bei Storage → photos die erlaubten Typen prüfen';
+  }
+  if (m.includes('exceeded') || m.includes('too large')) {
+    return 'Datei zu groß für die eingestellte Grenze';
   }
   return e.message;
 }
