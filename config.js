@@ -45,6 +45,11 @@ const CONFIG = {
 // hier wird es einfach abgeschnitten statt kommentarlos zu scheitern.
 CONFIG.SUPABASE_URL = CONFIG.SUPABASE_URL.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
 
+// Beim Einfügen aus der Zwischenablage hängen gern Leerzeichen oder
+// Umbrüche an den Schlüsseln. Die hier wegzuschneiden kostet nichts.
+CONFIG.SUPABASE_KEY = String(CONFIG.SUPABASE_KEY).trim();
+CONFIG.VAPID_PUBLIC_KEY = String(CONFIG.VAPID_PUBLIC_KEY || '').replace(/\s+/g, '');
+
 CONFIG.READY =
   CONFIG.CLOUD &&
   CONFIG.SUPABASE_URL.startsWith('http') &&
