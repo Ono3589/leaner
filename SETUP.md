@@ -351,6 +351,69 @@ mehr, hat das Verkleinern nicht gegriffen.
 
 ---
 
+## Schritt 10 — Erinnerungen
+
+Vier Teile: Schlüssel erzeugen, Secrets hinterlegen, Tabellen und
+Zeitsteuerung anlegen, Versandfunktion veröffentlichen.
+
+**1. Schlüsselpaar erzeugen.** Im Terminal:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Das gibt einen öffentlichen und einen privaten Schlüssel aus. Der
+öffentliche darf in den Code, der private gehört ausschließlich nach
+Supabase. Beide vorerst in deinen Passwortmanager.
+
+**2. In Supabase hinterlegen.** Unter **Edge Functions → Secrets**
+vier Einträge anlegen:
+
+| Name | Wert |
+|---|---|
+| `VAPID_PUBLIC_KEY` | der öffentliche Schlüssel |
+| `VAPID_PRIVATE_KEY` | der private Schlüssel |
+| `VAPID_SUBJECT` | `mailto:` und deine Adresse, z. B. `mailto:leaner@deine-domain.de` |
+| `NOTIFY_SECRET` | eine selbst ausgedachte Zeichenkette, mindestens 20 Zeichen |
+
+Den öffentlichen Schlüssel zusätzlich in `config.js` eintragen:
+
+```js
+VAPID_PUBLIC_KEY: 'BEl62iUYgUiv…'
+```
+
+**3. Tabellen und Zeitsteuerung.** In `supabase/schema-4.sql` ganz
+unten zwei Platzhalter ersetzen:
+
+- `PROJEKT` → deine Project-Ref, bei dir `lasqqdmhsldorvgzbffj`
+- `GEHEIM` → derselbe Wert wie `NOTIFY_SECRET`
+
+Dann die Datei komplett im SQL Editor ausführen. Zur Kontrolle:
+
+```sql
+select jobname, schedule, active from cron.job;
+```
+
+Dort muss `leaner-notify` mit `*/15 * * * *` stehen.
+
+**4. Versandfunktion veröffentlichen.** Edge Functions → neue Funktion
+namens `notify`, Inhalt von `supabase/functions/notify/index.ts`.
+
+**Testen.** In der App: Profil → Erinnerungen → **Erinnerungen
+einschalten**, dann **Testbenachrichtigung schicken**. Die sollte
+binnen Sekunden ankommen.
+
+> **Auf dem iPhone unverzichtbar:** Die App muss über Safari zum
+> Home-Bildschirm hinzugefügt sein. In einem Safari-Tab gibt es keine
+> Mitteilungen — Apple lässt das nicht zu. Steht im Profil der Hinweis
+> „Zum Home-Bildschirm", ist genau das die Ursache.
+
+**Der Job läuft alle 15 Minuten** und entscheidet dann selbst, für wen
+etwas ansteht. Das ist verlässlicher, als für jede Uhrzeit einen eigenen
+Job anzulegen, und erlaubt jedem eine eigene Weckzeit.
+
+---
+
 ## Aufs iPhone holen
 
 1. Deine Pages-Adresse in **Safari** öffnen. Nicht Chrome — nur Safari kann

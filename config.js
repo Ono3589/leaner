@@ -33,7 +33,12 @@ const CONFIG = {
                   noch angepasste Vorlagen. Der schnellste Weg.
      'code'     — sechsstelliger Code per Mail. Braucht eigenen SMTP-Versand
                   (SETUP.md, Schritt 5b). Umstellen ist ein Wort hier. */
-  AUTH_MODE: 'code'
+  AUTH_MODE: 'code',
+
+  /* Öffentlicher VAPID-Schlüssel für die Erinnerungen.
+     Darf öffentlich sein — der private gehört als Secret nach
+     Supabase und nirgendwo sonst hin (SETUP.md, Schritt 10). */
+  VAPID_PUBLIC_KEY: 'HIER_DEIN_VAPID_PUBLIC_KEY'
 };
 
 // Ein versehentlich mitkopiertes /rest/v1/ ist der häufigste Stolperstein —

@@ -20,7 +20,7 @@
      verspätet — und bei einer falschen config.js sucht man den Fehler
      an der völlig falschen Stelle. Bei jeder Änderung die Zahl
      hochzählen, passend zu BUILD in app.js. -->
-<link rel="stylesheet" href="styles.css?v=16">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 
@@ -59,16 +59,14 @@
 <canvas id="fx" aria-hidden="true"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=16"></script>
-<script src="cloud.js?v=16"></script>
-<script src="icons.js?v=16"></script>
-<script src="foods.js?v=16"></script>
-<script src="dishes.js?v=16"></script>
-<script src="nutrition.js?v=16"></script>
-<script src="photos.js?v=16"></script>
-<script src="avatar.js?v=16"></script>
-<script src="notify.js?v=16"></script>
-<script src="data.js?v=16"></script>
-<script src="app.js?v=16"></script>
+<script src="config.js?v=12"></script>
+<script src="cloud.js?v=12"></script>
+<script src="icons.js?v=12"></script>
+<script src="foods.js?v=12"></script>
+<script src="dishes.js?v=12"></script>
+<script src="nutrition.js?v=12"></script>
+<script src="photos.js?v=12"></script>
+<script src="data.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

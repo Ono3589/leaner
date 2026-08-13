@@ -12,7 +12,7 @@
    Fremde Adressen (Supabase, CDN) fasst der Worker nicht an.
    ============================================================ */
 
-const CACHE = 'leaner-v16';
+const CACHE = 'leaner-v14';
 
 /* Nur das Nötigste vorab. Alles andere landet automatisch im Cache,
    sobald es einmal geladen wurde. Fehlt eine Datei, kippt die
@@ -37,54 +37,6 @@ self.addEventListener('activate', (e) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
-  );
-});
-
-/* ------------------------------------------------------------
-   Erinnerungen empfangen
-
-   Auf iOS funktioniert das nur, wenn die App über Safari zum
-   Home-Bildschirm hinzugefügt wurde. Im Safari-Tab passiert nichts.
------------------------------------------------------------- */
-
-self.addEventListener('push', (e) => {
-  let data = { title: 'Leaner', body: '', url: '/', tag: 'leaner' };
-  try {
-    if (e.data) data = { ...data, ...e.data.json() };
-  } catch (err) {
-    if (e.data) data.body = e.data.text();
-  }
-
-  e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      tag: data.tag,
-      icon: './icons/icon.svg',
-      badge: './icons/icon.svg',
-      data: { url: data.url || '/' },
-      // Kein Vibrieren und kein Ton: Eine Erinnerung soll auffindbar
-      // sein, wenn man hinsieht, und sonst nicht stören.
-      silent: false,
-      requireInteraction: false
-    })
-  );
-});
-
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  const target = (e.notification.data && e.notification.data.url) || '/';
-
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      // Ist die App schon offen, dorthin springen statt neu laden
-      for (const client of list) {
-        if (client.url.includes(self.registration.scope) && 'focus' in client) {
-          client.navigate(new URL(target, self.registration.scope).href);
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(new URL(target, self.registration.scope).href);
-    })
   );
 });
 

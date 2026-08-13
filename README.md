@@ -69,6 +69,9 @@ Danach startet Leaner im Vollbild, mit eigenem Icon, ohne Safari-Leiste.
 | `photos.js` | Fotos auswählen, verkleinern, hochladen, anzeigen |
 | `supabase/schema-2.sql` | Nachtrag: Rezepte, eigene Zutaten, Produktcache |
 | `supabase/schema-3.sql` | Nachtrag: Bildspeicher und Fortschrittsfotos |
+| `supabase/schema-4.sql` | Nachtrag: Erinnerungen und Zeitsteuerung |
+| `avatar.js` | Der Coach als Punktraster |
+| `notify.js` | Erinnerungen erlauben und abonnieren |
 | `supabase/functions/coach/` | Der AI-Coach als Edge Function. Hier lebt der API-Key |
 | `supabase/functions/foodsearch/` | Produktsuche über Open Food Facts, mit Zwischenspeicher |
 | `deploy.sh` | Version hochzählen und veröffentlichen, in einem Befehl |

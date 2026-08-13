@@ -285,6 +285,54 @@ const Cloud = {
     if (error) throw error;
   },
 
+  /* ---------- Erinnerungen ---------- */
+
+  async saveSubscription(sub, label) {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const j = sub.toJSON();
+    const { error } = await this.sb.from('push_subscriptions').upsert({
+      user_id: this.user.id,
+      endpoint: j.endpoint,
+      p256dh: j.keys.p256dh,
+      auth: j.keys.auth,
+      label: label || null,
+      failures: 0
+    }, { onConflict: 'endpoint' });
+    if (error) throw error;
+  },
+
+  async removeSubscription(endpoint) {
+    if (!this.sb || !this.user) return;
+    await this.sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+  },
+
+  async getNotifyPrefs() {
+    if (!this.sb || !this.user) return null;
+    const { data, error } = await this.sb
+      .from('notify_prefs').select('*').eq('user_id', this.user.id).maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async saveNotifyPrefs(prefs) {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const { data, error } = await this.sb.from('notify_prefs').upsert({
+      user_id: this.user.id,
+      ...prefs,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin',
+      updated_at: new Date().toISOString()
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async testNotification() {
+    if (!this.sb || !this.user) throw new Error('nicht angemeldet');
+    const { data, error } = await this.sb.functions.invoke('notify', { body: { mode: 'test' } });
+    if (error) throw await describeFnError(error);
+    return data;
+  },
+
   /* ---------- Produktsuche ---------- */
 
   async searchProducts(query) {
@@ -463,6 +511,18 @@ function rowToFood(row) {
    steht überall nur "Edge Function returned a non-2xx status code". */
 async function describeFnError(error) {
   const res = error && error.context;
+
+  /* Kommt gar keine Antwort zurück, ist die Funktion nicht erreichbar.
+     Der Browser bricht dann schon vor der Antwort ab — meist weil es
+     die Funktion unter diesem Namen nicht gibt. */
+  const raw = (error && error.message ? error.message : '').toLowerCase();
+  if (!res || raw.includes('failed to send a request') || raw.includes('failed to fetch')) {
+    return new Error(
+      'Funktion nicht erreichbar. Sie ist vermutlich noch nicht veröffentlicht — ' +
+      'in Supabase unter Edge Functions nachsehen, ob sie dort steht (SETUP.md, Schritt 7 und 8).'
+    );
+  }
+
   if (res && typeof res.json === 'function') {
     try {
       const body = await res.clone().json();

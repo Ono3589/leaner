@@ -13,7 +13,7 @@ const KEY = 'leaner.state.v1';
 /* Beim Hochladen einer neuen Fassung mitzählen. Steht im Profil ganz
    unten — so lässt sich auf einen Blick sehen, ob das iPhone noch eine
    alte Version aus dem Zwischenspeicher bedient. */
-const BUILD = '16 · 12.08.2026';
+const BUILD = '14 · 12.08.2026';
 
 const DEFAULT_STATE = {
   xpTotal: 0,
@@ -2339,146 +2339,6 @@ function localCoachReply(text) {
 }
 
 /* ------------------------------------------------------------
-   Erinnerungen
-
-   Der Knopf zum Erlauben muss ein echtes Tippen sein — iOS zeigt
-   die Systemabfrage sonst gar nicht erst. Und wenn etwas fehlt,
-   steht hier, was genau, statt eines Knopfs ohne Wirkung.
------------------------------------------------------------- */
-
-let notifyPrefs = null;
-
-async function paintNotify() {
-  const box = document.getElementById('notifyBox');
-  if (!box) return;
-
-  const status = Notify.status();
-
-  if (status === 'home-bildschirm-noetig') {
-    box.innerHTML = `<div class="tiny muted">
-      Auf dem iPhone gehen Erinnerungen nur, wenn die App über Safari zum
-      Home-Bildschirm hinzugefügt wurde — im Browser-Tab lässt Apple das nicht zu.
-      <br><br>Teilen-Symbol antippen, dann <b>Zum Home-Bildschirm</b>. Danach die App
-      von dort öffnen, und hier steht ein Knopf.
-    </div>`;
-    return;
-  }
-
-  if (status === 'nicht-unterstuetzt') {
-    box.innerHTML = `<div class="tiny muted">
-      Dieser Browser kann keine Erinnerungen. Auf dem iPhone braucht es Safari
-      und die App auf dem Home-Bildschirm.</div>`;
-    return;
-  }
-
-  if (status === 'abgelehnt') {
-    box.innerHTML = `<div class="tiny muted">
-      Du hast Mitteilungen für diese App abgelehnt. Das lässt sich nur in den
-      Systemeinstellungen wieder ändern — auf dem iPhone unter
-      <b>Einstellungen → Mitteilungen → Leaner</b>.</div>`;
-    return;
-  }
-
-  const subscribed = await Notify.isSubscribed();
-
-  if (!subscribed) {
-    box.innerHTML = `
-      <div class="tiny muted" style="margin-bottom:12px">
-        Höchstens zwei Nachrichten am Tag. Was schon erledigt ist, wird nicht
-        erinnert — wer morgens abgehakt hat, hört abends nichts.
-      </div>
-      <button class="btn btn-primary btn-block" id="notifyOn">Erinnerungen einschalten</button>`;
-    document.getElementById('notifyOn').addEventListener('click', async (e) => {
-      const b = e.currentTarget;
-      b.disabled = true; b.textContent = 'Moment…';
-      try {
-        await Notify.enable();
-        notifyPrefs = await Cloud.saveNotifyPrefs({
-          morning: true, evening: true, weekly: true
-        });
-        haptic(12);
-        toast('Erinnerungen sind an', 'check');
-        paintNotify();
-      } catch (err) {
-        b.disabled = false; b.textContent = 'Erinnerungen einschalten';
-        toast(err.message || 'Hat nicht geklappt');
-        console.warn('Erinnerungen:', err);
-      }
-    });
-    return;
-  }
-
-  if (!notifyPrefs) {
-    try { notifyPrefs = await Cloud.getNotifyPrefs(); } catch (e) { /* gleich unten */ }
-    if (!notifyPrefs) {
-      try { notifyPrefs = await Cloud.saveNotifyPrefs({ morning: true, evening: true, weekly: true }); }
-      catch (e) {
-        box.innerHTML = `<div class="tiny muted">Einstellungen nicht erreichbar.
-          Wurde <b>schema-4.sql</b> schon ausgeführt?</div>`;
-        return;
-      }
-    }
-  }
-
-  const p = notifyPrefs;
-  const row = (key, name, desc, time) => `
-    <div class="toggle-row">
-      <div class="grow">
-        <div style="font-weight:550;font-size:14.5px">${name}${
-          time ? ` <span class="tiny faint">${String(time).slice(0, 5)} Uhr</span>` : ''}</div>
-        <div class="tiny faint">${desc}</div>
-      </div>
-      <button class="switch ${p[key] ? 'on' : ''}" data-notify="${key}"></button>
-    </div>`;
-
-  box.innerHTML = `
-    ${row('morning', 'Morgens', 'Deine Sachen für heute. Entfällt, wenn du schon aktiv warst.', p.morning_at)}
-    ${row('evening', 'Abends', 'Küche zu. Entfällt, wenn du heute nichts erfasst hast.', p.evening_at)}
-    ${row('weekly', 'Sonntags', 'Rückblick auf deine Woche. Ein Bericht, keine Aufforderung.', '18:00')}
-
-    <div class="tiny faint" style="margin:14px 0 10px">
-      Ruhe zwischen ${String(p.quiet_from).slice(0, 5)} und ${String(p.quiet_to).slice(0, 5)} Uhr.
-      Höchstens zwei Nachrichten am Tag.
-    </div>
-
-    <button class="btn btn-sm btn-block" id="notifyTest">Testbenachrichtigung schicken</button>
-    <button class="btn btn-sm btn-ghost btn-block" id="notifyOff" style="margin-top:6px">Auf diesem Gerät ausschalten</button>
-  `;
-
-  box.querySelectorAll('[data-notify]').forEach((b) => b.addEventListener('click', async () => {
-    const key = b.dataset.notify;
-    p[key] = !p[key];
-    b.classList.toggle('on', p[key]);
-    haptic(8);
-    try {
-      notifyPrefs = await Cloud.saveNotifyPrefs({
-        morning: p.morning, evening: p.evening, weekly: p.weekly
-      });
-    } catch (e) { toast('Konnte nicht gespeichert werden'); }
-  }));
-
-  document.getElementById('notifyTest').addEventListener('click', async (e) => {
-    const b = e.currentTarget;
-    b.disabled = true; b.textContent = 'Wird geschickt…';
-    try {
-      const r = await Cloud.testNotification();
-      toast(r && r.sent > 0
-        ? 'Unterwegs — sollte gleich ankommen'
-        : 'Kein Gerät erreicht', r && r.sent > 0 ? 'check' : 'plus');
-    } catch (err) {
-      toast(err.message || 'Versand fehlgeschlagen');
-      console.warn('Testversand:', err);
-    }
-    b.disabled = false; b.textContent = 'Testbenachrichtigung schicken';
-  });
-
-  document.getElementById('notifyOff').addEventListener('click', async () => {
-    try { await Notify.disable(); toast('Auf diesem Gerät aus'); paintNotify(); }
-    catch (e) { toast('Hat nicht geklappt'); }
-  });
-}
-
-/* ------------------------------------------------------------
    Fortschrittsfotos
 
    Aussagekräftiger als die Waage, weil sie zeigen, was sich
@@ -2807,14 +2667,6 @@ function renderProfile() {
 
     ${Cloud.user ? `
     <div class="section">
-      <div class="section-head"><h3 class="section-title">Erinnerungen</h3></div>
-      <div class="card" id="notifyBox">
-        <div class="tiny faint">Wird geprüft…</div>
-      </div>
-    </div>` : ''}
-
-    ${Cloud.user ? `
-    <div class="section">
       <div class="section-head">
         <h3 class="section-title">Fortschrittsfotos</h3>
         <button class="section-action" id="progAdd">Foto aufnehmen</button>
@@ -2890,7 +2742,6 @@ function renderProfile() {
   const progAdd = document.getElementById('progAdd');
   if (progAdd) progAdd.addEventListener('click', takeProgressPhoto);
   if (document.getElementById('progBox')) paintProgressPhotos();
-  if (document.getElementById('notifyBox')) paintNotify();
 
   const diag = document.getElementById('diagBtn');
   if (diag) diag.addEventListener('click', runDiagnostics);
