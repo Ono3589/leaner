@@ -21,7 +21,7 @@
    ============================================================ */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import webpush from 'npm:web-push@3.6.7';
+import { sendPush } from './webpush.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const CLIENT_KEY =
@@ -86,9 +86,9 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
-    return json({ error: 'VAPID-Schlüssel fehlen als Secret' }, 500);
+    return json({ error: 'VAPID-Schlüssel fehlen als Secret in Supabase' }, 500);
   }
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+  const vapid = { subject: VAPID_SUBJECT, publicKey: VAPID_PUBLIC, privateKey: VAPID_PRIVATE };
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const body = await req.json().catch(() => ({}));
@@ -103,13 +103,14 @@ Deno.serve(async (req) => {
     const { data: u } = await sb.auth.getUser();
     if (!u.user) return json({ error: 'nicht angemeldet' }, 401);
 
-    const sent = await sendTo(admin, u.user.id, {
+    const r = await sendTo(admin, u.user.id, {
       title: 'Test',
       body: 'Wenn du das liest, funktionieren die Erinnerungen.',
       tag: 'test',
       url: '/#profile'
-    });
-    return json({ sent });
+    }, vapid);
+    // Fehler mit zurückgeben — sonst steht in der App nur "kein Gerät erreicht"
+    return json({ sent: r.ok, geraete: r.total, fehler: r.errors });
   }
 
   /* ---------- Regulärer Lauf ---------- */
@@ -150,10 +151,10 @@ Deno.serve(async (req) => {
       const msg = await buildMessage(admin, p.user_id, kind);
       if (!msg) continue;                                   // nichts zu sagen — dann schweigen
 
-      const ok = await sendTo(admin, p.user_id, msg);
-      if (ok > 0) {
+      const r = await sendTo(admin, p.user_id, msg, vapid);
+      if (r.ok > 0) {
         await admin.from('notify_log').insert({ user_id: p.user_id, kind, day });
-        verschickt += ok;
+        verschickt += r.ok;
       }
     } catch (e) {
       console.error('Nutzer übersprungen:', p.user_id, (e as Error).message);
@@ -228,30 +229,44 @@ async function buildMessage(admin: ReturnType<typeof createClient>, userId: stri
 async function sendTo(
   admin: ReturnType<typeof createClient>,
   userId: string,
-  msg: { title: string; body: string; tag?: string; url?: string }
+  msg: { title: string; body: string; tag?: string; url?: string },
+  vapid: { subject: string; publicKey: string; privateKey: string }
 ) {
   const { data: subs } = await admin.from('push_subscriptions').select('*').eq('user_id', userId);
-  if (!subs || !subs.length) return 0;
+  if (!subs || !subs.length) return { ok: 0, total: 0, errors: ['kein Gerät angemeldet'] };
 
   let ok = 0;
+  const errors: string[] = [];
+
   for (const s of subs) {
     try {
-      await webpush.sendNotification(
+      const res = await sendPush(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
         JSON.stringify(msg),
-        { TTL: 3600, urgency: 'normal' }
+        vapid
       );
-      ok++;
-    } catch (e) {
-      const status = (e as { statusCode?: number }).statusCode;
-      if (status === 404 || status === 410) {
+
+      if (res.ok || res.status === 201) {
+        ok++;
+        continue;
+      }
+
+      const detail = (await res.text().catch(() => '')).slice(0, 160);
+      errors.push(`${s.label ?? 'Gerät'}: HTTP ${res.status} ${detail}`);
+      console.error('Push abgelehnt', res.status, detail);
+
+      // 404 und 410 heißen: Abo gibt es nicht mehr, App wurde entfernt
+      if (res.status === 404 || res.status === 410) {
         await admin.from('push_subscriptions').delete().eq('id', s.id);
       } else {
         await admin.from('push_subscriptions')
           .update({ failures: (s.failures ?? 0) + 1 }).eq('id', s.id);
       }
-      console.error('Versand fehlgeschlagen', status, (e as Error).message);
+    } catch (e) {
+      errors.push(`${s.label ?? 'Gerät'}: ${(e as Error).message}`);
+      console.error('Versand fehlgeschlagen', (e as Error).message);
     }
   }
-  return ok;
+
+  return { ok, total: subs.length, errors };
 }
