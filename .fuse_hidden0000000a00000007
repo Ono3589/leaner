@@ -13,7 +13,7 @@ const KEY = 'leaner.state.v1';
 /* Beim Hochladen einer neuen Fassung mitzählen. Steht im Profil ganz
    unten — so lässt sich auf einen Blick sehen, ob das iPhone noch eine
    alte Version aus dem Zwischenspeicher bedient. */
-const BUILD = '20 · 12.08.2026';
+const BUILD = '21 · 13.08.2026';
 
 const DEFAULT_STATE = {
   xpTotal: 0,
@@ -2905,7 +2905,7 @@ function renderProfile() {
     </div>
 
     <div class="section">
-      <button class="btn btn-block" id="msgLogBtn" style="margin-bottom:8px">Letzte Meldungen</button>
+      <button class="btn btn-block" id="logBtn" style="margin-bottom:8px">Letzte Meldungen</button>
       <button class="btn btn-ghost btn-block" id="resetBtn" style="color:var(--text-faint)">Fortschritt zurücksetzen</button>
       <button class="btn btn-ghost btn-block" id="wipeBtn2" style="color:var(--text-faint)">Zwischenspeicher leeren</button>
       <div class="tiny faint center" style="margin-top:14px;line-height:1.5">
@@ -2950,7 +2950,7 @@ function renderProfile() {
     showGate('email');
   });
 
-  document.getElementById('msgLogBtn').addEventListener('click', openLog);
+  document.getElementById('logBtn').addEventListener('click', openLog);
 
   document.getElementById('resetBtn').addEventListener('click', () => {
     if (confirm('Wirklich alles zurücksetzen? XP, Streak und Badges gehen verloren.')) {
