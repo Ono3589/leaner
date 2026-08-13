@@ -328,7 +328,10 @@ const Cloud = {
 
   async testNotification() {
     if (!this.sb || !this.user) throw new Error('nicht angemeldet');
-    const { data, error } = await this.sb.functions.invoke('notify', { body: { mode: 'test' } });
+    const { data, error } = await withTimeout(
+      this.sb.functions.invoke('notify', { body: { mode: 'test' } }),
+      25000, 'Die Funktion notify'
+    );
     if (error) throw await describeFnError(error);
     return data;
   },
@@ -337,7 +340,10 @@ const Cloud = {
 
   async searchProducts(query) {
     if (!this.sb || !this.user) return [];
-    const { data, error } = await this.sb.functions.invoke('foodsearch', { body: { q: query } });
+    const { data, error } = await withTimeout(
+      this.sb.functions.invoke('foodsearch', { body: { q: query } }),
+      15000, 'Die Produktsuche'
+    );
     if (error) throw await describeFnError(error);
     return (data && data.products) || [];
   },
@@ -355,9 +361,10 @@ const Cloud = {
 
   async coach(messages, context) {
     if (!this.sb || !this.user) throw new Error('nicht angemeldet');
-    const { data, error } = await this.sb.functions.invoke('coach', {
-      body: { messages, context }
-    });
+    const { data, error } = await withTimeout(
+      this.sb.functions.invoke('coach', { body: { messages, context } }),
+      30000, 'Der Coach'
+    );
     if (error) throw await describeFnError(error);
     if (!data || !data.reply) throw new Error('Antwort war leer');
     return data.reply;
@@ -471,6 +478,21 @@ const Cloud = {
     return steps;
   }
 };
+
+/* Jede Anfrage an eine Edge Function bekommt ein Zeitlimit.
+   Ohne das hängt die Oberfläche unbegrenzt, wenn die Gegenseite
+   nicht antwortet — und man sieht nicht einmal, dass etwas klemmt. */
+function withTimeout(promise, ms, was) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(
+        `${was} hat nach ${Math.round(ms / 1000)} Sekunden nicht geantwortet. ` +
+        `In Supabase unter Edge Functions → Logs steht, was dort passiert ist.`
+      )), ms)
+    )
+  ]);
+}
 
 /* Datenbankzeilen in die Formen übersetzen, die der Rest der App
    ohnehin kennt — so muss die Oberfläche nichts über Tabellen wissen. */
