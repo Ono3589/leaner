@@ -38,8 +38,7 @@ const CONFIG = {
   /* Öffentlicher VAPID-Schlüssel für die Erinnerungen.
      Darf öffentlich sein — der private gehört als Secret nach
      Supabase und nirgendwo sonst hin (SETUP.md, Schritt 10). */
-  VAPID_PUBLIC_KEY: 'BEa7h1z8I_K-5hTZENJFeKkdUumn-tFUHZc-JPJcS0edHTGPJWFILkSwbnn5aSTPUANcIuq1s_cYXEXTCdAn83Q
-'
+  VAPID_PUBLIC_KEY: 'BEa7h1z8I_K-5hTZENJFeKkdUumn-tFUHZc-JPJcS0edHTGPJWFILkSwbnn5aSTPUANcIuq1s_cYXEXTCdAn83Q'
 };
 
 // Ein versehentlich mitkopiertes /rest/v1/ ist der häufigste Stolperstein —
